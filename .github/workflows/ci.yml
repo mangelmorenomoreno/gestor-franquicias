@@ -2,7 +2,7 @@ name: Validación backend
 
 on:
   push:
-    branches: [dev, test, stage, main, feature/arquitectura-backend, bugfix/empaquetado-docker-ci]
+    branches: [dev, test, stage, main, feature/validacion-final-entrega]
   workflow_dispatch:
 
 permissions:
@@ -38,6 +38,18 @@ jobs:
 
       - name: Construir imagen Docker sin descargar dependencias nuevamente
         run: docker build -f Dockerfile.runtime -t gestor-franquicias:validacion .
+
+      - name: Validar arranque real de la imagen y persistencia
+        run: bash scripts/validar-contenedor.sh
+
+      - name: Validar configuración de Docker Compose
+        env:
+          DB_USERNAME: gestor_franquicias
+          DB_PASSWORD: CLAVE_TEMPORAL_DE_VALIDACION
+          IMAGEN_BACKEND: gestor-franquicias:validacion
+        run: |
+          docker compose -f docker-compose.yml config -q
+          docker compose -f docker-compose.prod.yml config -q
 
   infraestructura:
     name: Validar Terraform
