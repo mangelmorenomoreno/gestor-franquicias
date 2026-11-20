@@ -12,3 +12,4 @@ target/
 *.tfvars
 !*.tfvars.example
 crash.log
+empaquetado/
