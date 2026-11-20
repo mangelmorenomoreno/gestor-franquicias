@@ -49,3 +49,11 @@ El workflow de validación está configurado para ejecutarse con pushes a las ra
 Docker Compose permite iniciar la API y PostgreSQL localmente. Terraform define recursos propios del proyecto en el VPS: contenedor de PostgreSQL, volumen de datos y red Docker.
 
 El estado de Terraform puede contener información sensible, por lo que debe mantenerse fuera de Git. El despliegue en el VPS está pendiente de ejecución y validación.
+
+## Empaquetado y validación
+
+Durante la integración continua, Maven compila y ejecuta las pruebas usando su caché de dependencias. El JAR verificado se copia a un directorio temporal `empaquetado/` que está excluido de Git.
+
+El archivo `Dockerfile.runtime` construye la imagen utilizando ese JAR, sin descargar nuevamente dependencias de Maven. Esto reduce solicitudes innecesarias al repositorio de artefactos y evita que una limitación temporal del servidor de dependencias afecte a una imagen cuyo código ya fue validado.
+
+El archivo `Dockerfile` se conserva para construir la aplicación directamente con Docker Compose desde el código fuente en un equipo de desarrollo.
