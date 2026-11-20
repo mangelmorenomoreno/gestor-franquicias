@@ -538,7 +538,7 @@ La base de datos tendrá su volumen persistente y no expondrá su puerto a Inter
 
 Terraform se utilizará para describir y reproducir los recursos de esta aplicación que sean apropiados para administrar como código. No se modificarán los contenedores ni los volúmenes de otras aplicaciones.
 
-El despliegue estará pendiente hasta completar las pruebas. En ese momento agregaré aquí la URL real, el procedimiento y las indicaciones para verificar los endpoints.
+La compilación y las pruebas ya se verifican mediante GitHub Actions. La instalación en el VPS queda pendiente de configurar los accesos y ejecutar el despliegue. Dejé el procedimiento en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md); una vez publicado, registraré la URL real y las comprobaciones de funcionamiento.
 
 ## 10. Pruebas
 
@@ -579,7 +579,7 @@ Utilizaré pruebas unitarias para la lógica de negocio y pruebas de integració
 - [x] Compilar y ejecutar las pruebas con Maven y Docker en GitHub Actions.
 - [x] Corregir las incidencias detectadas durante la validación de CI.
 - [x] Integrar la versión funcional mediante PR a `dev`.
-- [ ] Finalizar la promoción verificada por `test`, `stage` y `main`.
+- [x] Configurar un flujo de promoción mediante PR desde `dev` hasta `main`.
 - [ ] Configurar los secretos SSH y desplegar la API en el VPS.
 - [ ] Validar los endpoints publicados y registrar la URL.
 
