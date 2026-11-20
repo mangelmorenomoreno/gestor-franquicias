@@ -4,7 +4,7 @@ API REST para administrar franquicias, sucursales y productos. La estoy desarrol
 
 La idea es manejar la información de cada franquicia, sus sucursales y el stock de los productos de forma independiente. También se podrá consultar qué producto tiene la mayor cantidad disponible en cada sucursal de una franquicia.
 
-> **Estado del proyecto:** configuración inicial. Por ahora el repositorio contiene la documentación base; los endpoints, pruebas, contenedores y despliegue se irán incorporando en las siguientes etapas. Los ejemplos de este README muestran el contrato que voy a implementar, no servicios que ya estén publicados.
+> **Estado del proyecto:** implementación en `feature/arquitectura-backend`. Ya están creados los controladores, casos de uso, proveedores R2DBC, migraciones, pruebas, Docker y archivos de Terraform y CI. Aún debo validar la compilación y la ejecución de las pruebas; no he realizado ningún despliegue en el VPS.
 
 ## 1. Funcionalidades
 
@@ -90,7 +90,7 @@ No voy a crear una relación muchos a muchos ni un catálogo global de productos
 
 ### Estructura propuesta en PostgreSQL
 
-El siguiente SQL es el diseño que voy a convertir en migraciones Flyway. **Todavía no se ha ejecutado ni creado en el repositorio.**
+Este modelo ya está incorporado en la migración `V1__crear_modelo.sql` de Flyway. Todavía falta validar su ejecución real en PostgreSQL.
 
 ~~~sql
 CREATE TABLE franquicias (
@@ -170,7 +170,7 @@ Por ejemplo, para consultar una franquicia con sucursales, obtendré la franquic
 
 Las colecciones vacías se devolverán como `[]`, no como `null`.
 
-## 4. Endpoints previstos
+## 4. Endpoints implementados en la rama de desarrollo
 
 Todos los endpoints utilizarán el prefijo `/api/v1`. Además de los criterios obligatorios, agregaré las consultas necesarias para recorrer las relaciones entre franquicias, sucursales y productos.
 
@@ -393,28 +393,41 @@ Para mantener consistencia, centralizaré el manejo de errores y devolveré resp
 
 ## 6. Organización del código
 
-Voy a separar las responsabilidades para que la lógica de negocio no quede dentro de los controladores.
-
-Estructura propuesta:
+Organicé la aplicación en módulos de franquicias, sucursales y productos, separando los controladores, las interfaces de servicios, los casos de uso y los proveedores de datos. También definí componentes comunes para los DTO, las respuestas y la persistencia.
 
 ~~~text
-src/
-├── main/
-│   ├── java/
-│   │   └── .../gestorfranquicias/
-│   │       ├── franquicia/
-│   │       ├── sucursal/
-│   │       ├── producto/
-│   │       └── compartido/
-│   └── resources/
-│       ├── application.yml
-│       └── db/migration/
-└── test/
+src/main/java/com/moreno/gestorfranquicias/
+├── modules/
+│   ├── franquicias/
+│   │   ├── api/
+│   │   ├── usecase/
+│   │   └── dataproviders/r2dbc/
+│   ├── sucursales/
+│   │   ├── api/
+│   │   ├── usecase/
+│   │   └── dataproviders/r2dbc/
+│   └── productos/
+│       ├── api/
+│       ├── usecase/
+│       └── dataproviders/r2dbc/
+├── crosscutting/
+│   ├── domain/
+│   │   ├── common/
+│   │   ├── request/
+│   │   └── response/
+│   └── persistence/
+│       ├── franquicia/
+│       ├── sucursal/
+│       └── producto/
+└── infrastructure/
+    └── exception/
 ~~~
 
-Cada módulo tendrá sus controladores, servicios, repositorios, modelos y DTO según lo necesite. Las validaciones y las excepciones comunes quedarán centralizadas.
+Los controladores solo reciben peticiones HTTP, validan el contrato de entrada y delegan la operación a un servicio. Los servicios contienen las reglas de negocio y dependen de contratos de proveedores, no directamente de los repositorios. Las implementaciones R2DBC se encargan de consultar PostgreSQL.
 
-Voy a mantener nombres de clases, métodos, variables y mensajes entendibles, sin abreviaciones innecesarias. Los comentarios se agregarán cuando expliquen una decisión o una regla de negocio que no sea evidente.
+Los DTO de entrada y salida se mantienen separados de las entidades; los mapeadores centralizan la conversión. Utilicé nombres de métodos, variables y mensajes entendibles en español. Los registros de persistencia son records inmutables de Java para que las modificaciones sean explícitas.
+
+Las decisiones están detalladas en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
 
 ## 7. Flujo de trabajo con Git
 
@@ -460,29 +473,57 @@ GitHub Actions se configurará para compilar y ejecutar las pruebas de acuerdo c
 
 ## 8. Ejecución local
 
-**Pendiente de habilitar:** en este momento todavía no existe el código de la aplicación ni el archivo Docker Compose. Cuando estén disponibles, esta sección tendrá los comandos reales para levantar el entorno sin ajustes manuales.
+### Requisitos
 
-La configuración local prevista es:
+Docker y Docker Compose. Si quiero ejecutar la API fuera de Docker, necesito también Java 21 y Maven.
 
-- Java 21 y Maven, si se ejecuta sin contenedores.
-- Docker y Docker Compose para ejecutar API y PostgreSQL.
-- Variables de entorno para la URL de la base de datos, usuario y contraseña.
-- Flyway para aplicar las migraciones al iniciar.
+### Iniciar la aplicación con Docker
 
-Variables previstas:
-
-~~~dotenv
-DB_URL=r2dbc:postgresql://localhost:5432/gestor_franquicias
-DB_USERNAME=gestor_franquicias
-DB_PASSWORD=CAMBIAR_POR_CLAVE_LOCAL
-
-# Solo para las migraciones con Flyway
-DB_MIGRATION_URL=jdbc:postgresql://localhost:5432/gestor_franquicias
+~~~bash
+git clone https://github.com/mangelmorenomoreno/gestor-franquicias.git
+cd gestor-franquicias
+git checkout feature/arquitectura-backend
+cp .env.example .env
 ~~~
 
-Estos valores son de ejemplo, no credenciales reales. La configuración definitiva quedará en `.env.example` y las contraseñas no se subirán al repositorio.
+Debo reemplazar la contraseña del archivo `.env` por una clave segura. Después:
 
-Cuando el proyecto esté implementado, documentaré aquí los comandos exactos para compilar, iniciar la aplicación, ejecutar las pruebas y abrir Swagger.
+~~~bash
+docker compose up -d --build
+docker compose ps
+~~~
+
+Las direcciones previstas en el entorno local son:
+
+- API: `http://localhost:8088`
+- Swagger: `http://localhost:8088/swagger-ui.html`
+- Estado de salud: `http://localhost:8088/actuator/health`
+- PostgreSQL: `localhost:5434` (solo accesible desde mi equipo)
+
+Flyway utiliza JDBC para aplicar las migraciones y la API utiliza R2DBC para consultar PostgreSQL.
+
+### Ejecutar con Maven
+
+~~~bash
+docker compose up -d base-datos
+export DB_URL="r2dbc:postgresql://localhost:5434/gestor_franquicias"
+export DB_MIGRATION_URL="jdbc:postgresql://localhost:5434/gestor_franquicias"
+export DB_USERNAME="gestor_franquicias"
+export DB_PASSWORD="CLAVE_CONFIGURADA_EN_ENV"
+mvn spring-boot:run
+~~~
+
+En Windows PowerShell, debo cambiar `export` por `$env:NOMBRE_VARIABLE = "valor"`.
+
+### Ejecutar pruebas
+
+~~~bash
+mvn clean verify
+~~~
+
+Las pruebas de integración requieren Docker porque utilizan Testcontainers y una instancia temporal de PostgreSQL.
+
+**Validación pendiente:** este entorno no tiene Maven ni Docker disponibles para ejecutar el proyecto. Los archivos ya están en GitHub, pero todavía debo comprobar la compilación, las migraciones y las pruebas automatizadas antes de promover la rama.
 
 ## 9. Despliegue en la nube
 
@@ -528,17 +569,20 @@ Utilizaré pruebas unitarias para la lógica de negocio y pruebas de integració
 
 ## 11. Avance del proyecto
 
-- [x] Crear el repositorio público.
-- [x] Definir el alcance y el diseño inicial.
-- [ ] Crear las ramas `dev`, `test` y `stage`.
-- [ ] Inicializar Spring Boot y configurar PostgreSQL.
-- [ ] Implementar los endpoints obligatorios.
-- [ ] Implementar las consultas de franquicias, sucursales y productos con sus relaciones.
-- [ ] Implementar los endpoints adicionales.
-- [ ] Agregar pruebas unitarias y de integración.
-- [ ] Configurar Docker, Compose y Flyway.
-- [ ] Configurar Terraform y GitHub Actions.
-- [ ] Desplegar la solución en la nube y verificarla.
-- [ ] Completar los comandos y la URL de ejecución.
+- [x] Crear el repositorio y definir los requisitos.
+- [x] Crear las ramas `dev`, `test`, `stage` y `feature/arquitectura-backend`.
+- [x] Incorporar la estructura modular con responsabilidades independientes.
+- [x] Implementar los endpoints obligatorios y las consultas relacionadas.
+- [x] Agregar los cambios de nombre de franquicia, sucursal y producto.
+- [x] Crear migraciones de PostgreSQL, Docker y Docker Compose.
+- [x] Incorporar pruebas unitarias, integración y archivos iniciales de CI.
+- [x] Preparar la infraestructura de PostgreSQL con Terraform.
+- [ ] Compilar y ejecutar las pruebas con Maven y Docker.
+- [ ] Resolver cualquier falla detectada.
+- [ ] Revisar e integrar el PR a `dev`.
+- [ ] Promover los cambios a `test`, `stage` y `main`.
+- [ ] Configurar secretos y desplegar la prueba en el VPS.
+- [ ] Validar los endpoints publicados y registrar la URL.
 
-Iré actualizando este README junto con los cambios del proyecto para que la documentación siempre corresponda con el código que está en el repositorio.
+Actualizaré esta documentación con los resultados reales de las validaciones y del despliegue.
+

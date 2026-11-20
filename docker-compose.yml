@@ -1,0 +1,31 @@
+services:
+  base-datos:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gestor_franquicias
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - datos_franquicias:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  api:
+    build: .
+    environment:
+      DB_URL: r2dbc:postgresql://base-datos:5432/gestor_franquicias
+      DB_MIGRATION_URL: jdbc:postgresql://base-datos:5432/gestor_franquicias
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "127.0.0.1:8088:8080"
+    depends_on:
+      base-datos:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  datos_franquicias:

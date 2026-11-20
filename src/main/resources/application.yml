@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: gestor-franquicias
+  r2dbc:
+    url: ${DB_URL:r2dbc:postgresql://localhost:5432/gestor_franquicias}
+    username: ${DB_USERNAME:gestor_franquicias}
+    password: ${DB_PASSWORD:}
+  flyway:
+    enabled: true
+    url: ${DB_MIGRATION_URL:jdbc:postgresql://localhost:5432/gestor_franquicias}
+    user: ${DB_USERNAME:gestor_franquicias}
+    password: ${DB_PASSWORD:}
+server:
+  port: ${PORT:8080}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
