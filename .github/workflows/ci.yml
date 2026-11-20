@@ -1,0 +1,57 @@
+name: Validación backend
+
+on:
+  push:
+    branches: [dev, test, stage, main, feature/arquitectura-backend, bugfix/empaquetado-docker-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validacion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    name: Compilar, probar y construir contenedor
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Obtener código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Validar compilación, pruebas y migraciones
+        run: mvn -B --no-transfer-progress clean verify
+
+      - name: Preparar JAR validado para Docker
+        run: |
+          mkdir -p empaquetado
+          cp target/gestor-franquicias-0.0.1-SNAPSHOT.jar empaquetado/gestor-franquicias.jar
+
+      - name: Construir imagen Docker sin descargar dependencias nuevamente
+        run: docker build -f Dockerfile.runtime -t gestor-franquicias:validacion .
+
+  infraestructura:
+    name: Validar Terraform
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Obtener código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Inicializar los proveedores
+        run: terraform -chdir=infra/terraform init -backend=false -input=false
+
+      - name: Validar configuración de infraestructura
+        run: terraform -chdir=infra/terraform validate -no-color

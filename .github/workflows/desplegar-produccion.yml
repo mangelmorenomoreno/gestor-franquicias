@@ -1,0 +1,54 @@
+name: Desplegar API en el VPS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desplegar:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: produccion
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verificar que el acceso al VPS esté configurado
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+
+      - name: Preparar acceso SSH seguro
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Actualizar únicamente los contenedores del proyecto
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes -i "$HOME/.ssh/id_ed25519" "$VPS_USER@$VPS_HOST" 'bash -se' <<'DESPLIEGUE'
+          set -euo pipefail
+          cd /opt/gestor-franquicias
+          test -f .env
+          test -f docker-compose.prod.yml
+          docker network inspect gestor-franquicias-red >/dev/null
+          docker compose --env-file .env -f docker-compose.prod.yml config -q
+          docker compose --env-file .env -f docker-compose.prod.yml pull api
+          docker compose --env-file .env -f docker-compose.prod.yml up -d --no-deps api
+          docker compose --env-file .env -f docker-compose.prod.yml ps
+          DESPLIEGUE
