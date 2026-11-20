@@ -4,7 +4,7 @@ API REST para administrar franquicias, sucursales y productos. La estoy desarrol
 
 La idea es manejar la información de cada franquicia, sus sucursales y el stock de los productos de forma independiente. También se podrá consultar qué producto tiene la mayor cantidad disponible en cada sucursal de una franquicia.
 
-> **Estado del proyecto:** implementación en `feature/arquitectura-backend`. Ya están creados los controladores, casos de uso, proveedores R2DBC, migraciones, pruebas, Docker y archivos de Terraform y CI. Aún debo validar la compilación y la ejecución de las pruebas; no he realizado ningún despliegue en el VPS.
+> **Estado del proyecto:** API REST implementada y verificada mediante GitHub Actions con Java 21, pruebas automatizadas, PostgreSQL, Docker y Terraform. El despliegue de producción en el VPS es una actividad independiente y todavía no se ha realizado.
 
 ## 1. Funcionalidades
 
@@ -90,7 +90,7 @@ No voy a crear una relación muchos a muchos ni un catálogo global de productos
 
 ### Estructura propuesta en PostgreSQL
 
-Este modelo ya está incorporado en la migración `V1__crear_modelo.sql` de Flyway. Todavía falta validar su ejecución real en PostgreSQL.
+Este modelo está definido en la migración `V1__crear_modelo.sql` de Flyway. Las pruebas de integración ejecutan las migraciones sobre PostgreSQL mediante Testcontainers.
 
 ~~~sql
 CREATE TABLE franquicias (
@@ -170,7 +170,7 @@ Por ejemplo, para consultar una franquicia con sucursales, obtendré la franquic
 
 Las colecciones vacías se devolverán como `[]`, no como `null`.
 
-## 4. Endpoints implementados en la rama de desarrollo
+## 4. Endpoints REST
 
 Todos los endpoints utilizarán el prefijo `/api/v1`. Además de los criterios obligatorios, agregaré las consultas necesarias para recorrer las relaciones entre franquicias, sucursales y productos.
 
@@ -482,7 +482,6 @@ Docker y Docker Compose. Si quiero ejecutar la API fuera de Docker, necesito tam
 ~~~bash
 git clone https://github.com/mangelmorenomoreno/gestor-franquicias.git
 cd gestor-franquicias
-git checkout feature/arquitectura-backend
 cp .env.example .env
 ~~~
 
@@ -523,7 +522,7 @@ mvn clean verify
 
 Las pruebas de integración requieren Docker porque utilizan Testcontainers y una instancia temporal de PostgreSQL.
 
-**Validación pendiente:** este entorno no tiene Maven ni Docker disponibles para ejecutar el proyecto. Los archivos ya están en GitHub, pero todavía debo comprobar la compilación, las migraciones y las pruebas automatizadas antes de promover la rama.
+**Validación técnica:** la compilación, las pruebas y la construcción de la imagen se verifican mediante GitHub Actions en cada ambiente. El flujo de CI utiliza una instancia temporal de PostgreSQL con Testcontainers y valida también Terraform. El despliegue real al VPS requiere una configuración independiente.
 
 ## 9. Despliegue en la nube
 
@@ -570,18 +569,18 @@ Utilizaré pruebas unitarias para la lógica de negocio y pruebas de integració
 ## 11. Avance del proyecto
 
 - [x] Crear el repositorio y definir los requisitos.
-- [x] Crear las ramas `dev`, `test`, `stage` y `feature/arquitectura-backend`.
+- [x] Crear y organizar las ramas permanentes `dev`, `test`, `stage` y `main`.
 - [x] Incorporar la estructura modular con responsabilidades independientes.
 - [x] Implementar los endpoints obligatorios y las consultas relacionadas.
 - [x] Agregar los cambios de nombre de franquicia, sucursal y producto.
 - [x] Crear migraciones de PostgreSQL, Docker y Docker Compose.
 - [x] Incorporar pruebas unitarias, integración y archivos iniciales de CI.
 - [x] Preparar la infraestructura de PostgreSQL con Terraform.
-- [ ] Compilar y ejecutar las pruebas con Maven y Docker.
-- [ ] Resolver cualquier falla detectada.
-- [ ] Revisar e integrar el PR a `dev`.
-- [ ] Promover los cambios a `test`, `stage` y `main`.
-- [ ] Configurar secretos y desplegar la prueba en el VPS.
+- [x] Compilar y ejecutar las pruebas con Maven y Docker en GitHub Actions.
+- [x] Corregir las incidencias detectadas durante la validación de CI.
+- [x] Integrar la versión funcional mediante PR a `dev`.
+- [ ] Finalizar la promoción verificada por `test`, `stage` y `main`.
+- [ ] Configurar los secretos SSH y desplegar la API en el VPS.
 - [ ] Validar los endpoints publicados y registrar la URL.
 
 Actualizaré esta documentación con los resultados reales de las validaciones y del despliegue.
