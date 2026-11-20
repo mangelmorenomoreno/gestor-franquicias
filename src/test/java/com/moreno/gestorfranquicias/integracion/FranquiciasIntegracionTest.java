@@ -84,6 +84,109 @@ class FranquiciasIntegracionTest {
                 .path("data").path("sucursales").size()).isZero();
     }
 
+
+    @Test
+    void sucursalSinProductosDevuelveListaVacia() throws Exception {
+        long franquicia = crear("/api/v1/franquicias", Map.of("nombre", "Franquicia Vacia"), "idFranquicia");
+        long sucursal = crear("/api/v1/franquicias/" + franquicia + "/sucursales",
+                Map.of("nombre", "Sin inventario"), "idSucursal");
+        JsonNode detalle = consultar("/api/v1/sucursales/" + sucursal).path("data");
+        assertThat(detalle.path("productos").size()).isZero();
+        assertThat(consultar("/api/v1/sucursales/" + sucursal + "/productos").path("data").size()).isZero();
+    }
+
+    @Test
+    void consultasNoMezclanFranquiciasNiSucursales() throws Exception {
+        long franquiciaUno = crear("/api/v1/franquicias", Map.of("nombre", "Franquicia Uno"), "idFranquicia");
+        long franquiciaDos = crear("/api/v1/franquicias", Map.of("nombre", "Franquicia Dos"), "idFranquicia");
+        long sucursalUno = crear("/api/v1/franquicias/" + franquiciaUno + "/sucursales",
+                Map.of("nombre", "Sucursal Uno"), "idSucursal");
+        long sucursalDos = crear("/api/v1/franquicias/" + franquiciaDos + "/sucursales",
+                Map.of("nombre", "Sucursal Dos"), "idSucursal");
+        long producto = crear("/api/v1/sucursales/" + sucursalUno + "/productos",
+                Map.of("nombre", "Producto exclusivo", "stock", 15), "idProducto");
+
+        assertThat(consultar("/api/v1/franquicias/" + franquiciaUno)
+                .path("data").path("sucursales").size()).isEqualTo(1);
+        assertThat(consultar("/api/v1/franquicias/" + franquiciaDos)
+                .path("data").path("sucursales").get(0).path("idSucursal").asLong()).isEqualTo(sucursalDos);
+
+        api.get().uri("/api/v1/sucursales/" + sucursalDos + "/productos/" + producto)
+                .exchange().expectStatus().isNotFound();
+        api.patch().uri("/api/v1/sucursales/" + sucursalDos + "/productos/" + producto + "/stock")
+                .bodyValue(Map.of("stock", 60)).exchange().expectStatus().isNotFound();
+        api.delete().uri("/api/v1/sucursales/" + sucursalDos + "/productos/" + producto)
+                .exchange().expectStatus().isNotFound();
+        assertThat(consultar("/api/v1/sucursales/" + sucursalUno + "/productos/" + producto)
+                .path("data").path("stock").asInt()).isEqualTo(15);
+    }
+
+    @Test
+    void mayorStockResuelveEmpateYOmiteSucursalSinProductos() throws Exception {
+        long franquicia = crear("/api/v1/franquicias", Map.of("nombre", "Franquicia Empate"), "idFranquicia");
+        long sucursal = crear("/api/v1/franquicias/" + franquicia + "/sucursales",
+                Map.of("nombre", "Sucursal Empate"), "idSucursal");
+        crear("/api/v1/franquicias/" + franquicia + "/sucursales",
+                Map.of("nombre", "Sucursal Sin Productos"), "idSucursal");
+        long primerProducto = crear("/api/v1/sucursales/" + sucursal + "/productos",
+                Map.of("nombre", "Primero", "stock", 50), "idProducto");
+        crear("/api/v1/sucursales/" + sucursal + "/productos",
+                Map.of("nombre", "Segundo", "stock", 50), "idProducto");
+
+        JsonNode resultado = consultar("/api/v1/franquicias/" + franquicia + "/productos/mayor-stock").path("data");
+        assertThat(resultado.size()).isEqualTo(1);
+        assertThat(resultado.get(0).path("idProducto").asLong()).isEqualTo(primerProducto);
+        assertThat(resultado.get(0).path("stock").asInt()).isEqualTo(50);
+    }
+
+    @Test
+    void validaNombresDuplicadosStockNegativoYRecursosInexistentes() throws Exception {
+        long franquicia = crear("/api/v1/franquicias", Map.of("nombre", "Franquicia Validaciones"), "idFranquicia");
+        long sucursal = crear("/api/v1/franquicias/" + franquicia + "/sucursales",
+                Map.of("nombre", "Sucursal Validaciones"), "idSucursal");
+
+        api.post().uri("/api/v1/franquicias/" + franquicia + "/sucursales")
+                .bodyValue(Map.of("nombre", "sucursal validaciones"))
+                .exchange().expectStatus().isEqualTo(409);
+        api.post().uri("/api/v1/sucursales/" + sucursal + "/productos")
+                .bodyValue(Map.of("nombre", "Producto Negativo", "stock", -1))
+                .exchange().expectStatus().isBadRequest();
+        api.post().uri("/api/v1/sucursales/" + sucursal + "/productos")
+                .bodyValue(Map.of("nombre", "  ", "stock", 1))
+                .exchange().expectStatus().isBadRequest();
+        api.post().uri("/api/v1/franquicias/9999999/sucursales")
+                .bodyValue(Map.of("nombre", "Sin franquicia"))
+                .exchange().expectStatus().isNotFound();
+        api.get().uri("/api/v1/franquicias/9999999")
+                .exchange().expectStatus().isNotFound();
+    }
+
+    @Test
+    void permiteActualizarNombresDeLosTresNiveles() throws Exception {
+        long franquicia = crear("/api/v1/franquicias", Map.of("nombre", "Franquicia Renombrar"), "idFranquicia");
+        long sucursal = crear("/api/v1/franquicias/" + franquicia + "/sucursales",
+                Map.of("nombre", "Sucursal Renombrar"), "idSucursal");
+        long producto = crear("/api/v1/sucursales/" + sucursal + "/productos",
+                Map.of("nombre", "Producto Renombrar", "stock", 5), "idProducto");
+
+        api.patch().uri("/api/v1/franquicias/" + franquicia)
+                .bodyValue(Map.of("nombre", "Franquicia Actualizada"))
+                .exchange().expectStatus().isOk();
+        api.patch().uri("/api/v1/sucursales/" + sucursal)
+                .bodyValue(Map.of("nombre", "Sucursal Actualizada"))
+                .exchange().expectStatus().isOk();
+        api.patch().uri("/api/v1/sucursales/" + sucursal + "/productos/" + producto)
+                .bodyValue(Map.of("nombre", "Producto Actualizado"))
+                .exchange().expectStatus().isOk();
+
+        assertThat(consultar("/api/v1/franquicias/" + franquicia).path("data")
+                .path("nombre").asText()).isEqualTo("Franquicia Actualizada");
+        assertThat(consultar("/api/v1/sucursales/" + sucursal).path("data")
+                .path("nombre").asText()).isEqualTo("Sucursal Actualizada");
+        assertThat(consultar("/api/v1/sucursales/" + sucursal + "/productos/" + producto).path("data")
+                .path("nombre").asText()).isEqualTo("Producto Actualizado");
+    }
+
     private long crear(String ruta, Map<String, ?> datos, String nombreIdentificador) throws Exception {
         String respuesta = api.post().uri(ruta).bodyValue(datos)
                 .exchange().expectStatus().isCreated()
