@@ -34,7 +34,7 @@ jobs:
       - name: Construir imagen Docker
         run: docker build -t gestor-franquicias:validacion .
 
-infraestructura:
+  infraestructura:
     name: Validar Terraform
     runs-on: ubuntu-latest
     timeout-minutes: 15
