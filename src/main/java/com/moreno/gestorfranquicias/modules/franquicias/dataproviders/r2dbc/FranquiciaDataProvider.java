@@ -10,6 +10,6 @@ public class FranquiciaDataProvider implements IFranquiciaDataProvider {
     private final FranquiciaRepository repositorio;
     public FranquiciaDataProvider(FranquiciaRepository repositorio) { this.repositorio = repositorio; }
     public Mono<FranquiciaEntity> buscar(Long idFranquicia) { return repositorio.findById(idFranquicia); }
-    public Flux<FranquiciaEntity> listar() { return repositorio.findAll().sort((uno, otro) -> uno.idFranquicia().compareTo(otro.idFranquicia())); }
+    public Flux<FranquiciaEntity> listar() { return repositorio.findAllByOrderByIdFranquiciaAsc(); }
     public Mono<FranquiciaEntity> guardar(FranquiciaEntity franquicia) { return repositorio.save(franquicia); }
 }
