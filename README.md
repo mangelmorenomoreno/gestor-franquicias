@@ -534,11 +534,11 @@ La ruta prevista es:
 /opt/gestor-franquicias/
 ~~~
 
-La base de datos tendrá su volumen persistente y no expondrá su puerto a Internet. La API se publicará en un puerto específico del servidor; el acceso inicial podrá hacerse mediante la IP pública, sin necesidad de un dominio.
+La base de datos tendrá su volumen persistente y no expondrá su puerto a Internet. La API utilizará un puerto específico del servidor. Por seguridad el acceso inicial queda limitado a `127.0.0.1`, hasta configurar el firewall y permitir la IP de evaluación.
 
 Terraform se utilizará para describir y reproducir los recursos de esta aplicación que sean apropiados para administrar como código. No se modificarán los contenedores ni los volúmenes de otras aplicaciones.
 
-La compilación y las pruebas ya se verifican mediante GitHub Actions. La instalación en el VPS queda pendiente de configurar los accesos y ejecutar el despliegue. Dejé el procedimiento en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md); una vez publicado, registraré la URL real y las comprobaciones de funcionamiento.
+La compilación y las pruebas se verifican mediante GitHub Actions, incluyendo el arranque real de la imagen Docker y su conexión a PostgreSQL. La instalación en el VPS queda pendiente de configurar los accesos y ejecutar el despliegue. Dejé el procedimiento en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md); una vez publicado, registraré la URL real y las comprobaciones de funcionamiento.
 
 ## 10. Pruebas
 
