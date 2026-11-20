@@ -1,0 +1,3 @@
+nombre_base_datos  = "gestor_franquicias"
+usuario_base_datos = "gestor_franquicias"
+clave_base_datos   = "CAMBIAR_POR_CLAVE_PRIVADA"

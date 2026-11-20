@@ -1,0 +1,17 @@
+services:
+  api:
+    image: ${IMAGEN_BACKEND:-gestor-franquicias:local}
+    restart: unless-stopped
+    ports:
+      - "${PUERTO_API:-8088}:8080"
+    environment:
+      DB_URL: r2dbc:postgresql://base-datos:5432/gestor_franquicias
+      DB_MIGRATION_URL: jdbc:postgresql://base-datos:5432/gestor_franquicias
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - red_franquicias
+networks:
+  red_franquicias:
+    external: true
+    name: gestor-franquicias-red
