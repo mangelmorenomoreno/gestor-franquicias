@@ -17,6 +17,7 @@ Configuración del archivo `.env` (ejemplo, no utilizar esta contraseña):
 ~~~dotenv
 IMAGEN_BACKEND=ghcr.io/mangelmorenomoreno/gestor-franquicias:latest
 PUERTO_API=8088
+IP_ESCUCHA_API=127.0.0.1
 DB_USERNAME=gestor_franquicias
 DB_PASSWORD=CAMBIAR_POR_UNA_CLAVE_PRIVADA
 ~~~
@@ -42,6 +43,8 @@ Las credenciales reales nunca deben escribirse en el repositorio ni compartirse 
 
 Una vez configurados, ejecutar manualmente el workflow `Desplegar API en el VPS` desde la rama `main`. Esta tarea actualiza solo el servicio `api` dentro del proyecto de Compose que se encuentra en `/opt/gestor-franquicias`.
 
+La opción `IP_ESCUCHA_API=127.0.0.1` mantiene la API accesible solo desde el servidor por defecto. Recomiendo identificar la imagen por la etiqueta inmutable del commit en lugar de `latest` para mantener la trazabilidad de la entrega.
+
 El despliegue está pensado como operación independiente del proceso de publicación. No se ejecutará automáticamente en el VPS hasta que esté preparada y validada su infraestructura.
 
 ## Verificar el resultado
@@ -52,7 +55,7 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=100 api
 curl -fsS http://127.0.0.1:8088/actuator/health
 ~~~
 
-Desde otro equipo, si el puerto está habilitado, la documentación se encuentra en `http://IP_PUBLICA:8088/swagger-ui.html`. El acceso por IP y HTTP no está cifrado; para exponer la API durante más tiempo es recomendable usar HTTPS.
+Desde otro equipo, si el puerto está habilitado, la documentación se encuentra en `http://IP_PUBLICA:8088/swagger-ui.html`. El acceso por IP y HTTP no está cifrado. Como esta prueba no exige autenticación, los endpoints de escritura deben quedar restringidos mediante firewall a direcciones autorizadas. Para publicar por IP, usar `IP_ESCUCHA_API=0.0.0.0` solamente después de configurar esa restricción; para un acceso más prolongado es preferible HTTPS.
 
 ## Retirar la prueba
 
