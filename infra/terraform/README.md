@@ -1,22 +1,18 @@
-# Infraestructura de PostgreSQL
+# PostgreSQL aislado por entorno
 
-La base de datos se puede aprovisionar con Terraform en un entorno aislado del VPS. Terraform administra únicamente la red, el volumen y el contenedor de PostgreSQL de Gestor de Franquicias.
+Terraform utiliza el mismo código de infraestructura con la variable `ambiente` para `dev`, `test`, `stage` y `prod`.
 
-## Aplicación en el servidor
+Cada ambiente cuenta con un directorio independiente en el VPS (`/opt/gestor-franquicias/<ambiente>/infra/terraform`) y **su propio estado Terraform**. El nombre de la red, el volumen y el contenedor incorpora el entorno. Una operación de desarrollo no debe alterar PostgreSQL de producción.
 
-1. Instalar Terraform y confirmar que Docker funciona.
-2. Ejecutar los siguientes comandos desde esta carpeta:
+| Ambiente | Red Docker | Volumen PostgreSQL | Contenedor PostgreSQL |
+|---|---|---|---|
+| dev | `gestor-franquicias-dev-red` | `gestor-franquicias-dev-datos` | `gestor-franquicias-dev-postgres` |
+| test | `gestor-franquicias-test-red` | `gestor-franquicias-test-datos` | `gestor-franquicias-test-postgres` |
+| stage | `gestor-franquicias-stage-red` | `gestor-franquicias-stage-datos` | `gestor-franquicias-stage-postgres` |
+| prod | `gestor-franquicias-prod-red` | `gestor-franquicias-prod-datos` | `gestor-franquicias-prod-postgres` |
 
-~~~bash
-terraform init
-terraform validate
-export TF_VAR_clave_base_datos="CLAVE_PRIVADA"
-terraform plan
-terraform apply
-~~~
+El workflow de cada ambiente inicializa y valida Terraform, genera un plan e inspecciona que los cambios solo afecten sus recursos. Rechaza operaciones que eliminen el volumen persistente.
 
-3. Con el contenedor de PostgreSQL activo, configurar el archivo .env de la API y levantar el archivo docker-compose.prod.yml.
+El estado Terraform no debe sincronizarse con Git: contiene información sensible y debe respaldarse con permisos restringidos. Nunca ejecutar `terraform destroy` automáticamente.
 
-**Importante:** La contraseña también puede quedar registrada en el estado de Terraform, aunque la variable esté marcada como sensible. El archivo de estado debe quedar privado, fuera de Git y con permisos restringidos. No se debe hacer terraform destroy hasta que termine la evaluación y tengamos respaldo de los datos si queremos conservarlos.
-
-El despliegue todavía no se ha ejecutado sobre el VPS.
+El despliegue real necesita secretos SSH en los entornos de GitHub. No se ha ejecutado todavía en el VPS.

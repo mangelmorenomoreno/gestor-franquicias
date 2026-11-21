@@ -6,6 +6,8 @@ La idea es manejar la información de cada franquicia, sus sucursales y el stock
 
 > **Estado del proyecto:** API REST implementada y verificada mediante GitHub Actions con Java 21, pruebas automatizadas, PostgreSQL, Docker y Terraform. El despliegue de producción en el VPS es una actividad independiente y todavía no se ha realizado.
 
+**Ambientes independientes:** `dev` (puerto 8086), `test` (8087), `stage` (8089) y `prod` (8088). Cada uno dispone de un perfil Spring, archivo Docker Compose, red, base PostgreSQL, volumen y estado Terraform independientes. Primero se valida la conexión de `dev`; el flujo posterior respeta `dev → test → stage → main`. Los procedimientos y workflows se describen en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
+
 ## 1. Funcionalidades
 
 ### Requisitos de la prueba

@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: gestor-franquicias-produccion
+logging:
+  level:
+    root: WARN
+management:
+  endpoint:
+    health:
+      show-details: never
+springdoc:
+  swagger-ui:
+    enabled: true

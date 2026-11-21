@@ -1,0 +1,163 @@
+name: Despliegue compartido por ambiente
+
+on:
+  workflow_call:
+    inputs:
+      ambiente:
+        required: true
+        type: string
+      rama:
+        required: true
+        type: string
+      puerto:
+        required: true
+        type: number
+      entorno_github:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gestor-franquicias-despliegue-${{ inputs.ambiente }}
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    if: ${{ github.ref == format('refs/heads/{0}', inputs.rama) }}
+    environment: ${{ inputs.entorno_github }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Obtener código de la rama seleccionada
+        uses: actions/checkout@v4
+
+      - name: Validar acceso al VPS y configuración del ambiente
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          AMBIENTE: ${{ inputs.ambiente }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          [[ "$DB_PASSWORD" =~ ^[A-Za-z0-9_-]{20,}$ ]]
+          test -f "docker-compose.$AMBIENTE.yml"
+
+      - name: Configurar SSH con verificación del servidor
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Empaquetar recursos del ambiente sin guardar secretos en Git
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          AMBIENTE: ${{ inputs.ambiente }}
+          PUERTO: ${{ inputs.puerto }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/entrega/infra/terraform" "$RUNNER_TEMP/entrega/scripts"
+          cp infra/terraform/*.tf "$RUNNER_TEMP/entrega/infra/terraform/"
+          cp "docker-compose.$AMBIENTE.yml" "$RUNNER_TEMP/entrega/"
+          cp scripts/desplegar-vps.sh "$RUNNER_TEMP/entrega/scripts/"
+          {
+            printf 'DB_USERNAME=gestor_franquicias\n'
+            printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+            printf 'IMAGEN_BACKEND=ghcr.io/mangelmorenomoreno/gestor-franquicias:%s\n' "$GITHUB_SHA"
+            printf 'PUERTO_API=%s\n' "$PUERTO"
+            printf 'IP_ESCUCHA_API=127.0.0.1\n'
+          } > "$RUNNER_TEMP/entrega/.env"
+          tar -czf "$RUNNER_TEMP/gestor-franquicias-entrega.tar.gz" -C "$RUNNER_TEMP/entrega" .
+
+      - name: Transferir archivos exclusivamente al ambiente seleccionado
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          AMBIENTE: ${{ inputs.ambiente }}
+        run: |
+          set -euo pipefail
+          remoto="$VPS_USER@$VPS_HOST"
+          ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -i "$HOME/.ssh/id_ed25519" "$remoto" \
+            "umask 077; mkdir -p \"\$HOME/.gestor-franquicias-bootstrap/$AMBIENTE\"; chmod 700 \"\$HOME/.gestor-franquicias-bootstrap/$AMBIENTE\""
+          scp -q -p -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -i "$HOME/.ssh/id_ed25519" \
+            "$RUNNER_TEMP/gestor-franquicias-entrega.tar.gz" \
+            "$remoto:.gestor-franquicias-bootstrap/$AMBIENTE/entrega.tar.gz"
+
+      - name: Autenticar en GHCR si la imagen es privada
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          GHCR_USUARIO: ${{ secrets.GHCR_USUARIO }}
+          GHCR_LEER_PAQUETE: ${{ secrets.GHCR_LEER_PAQUETE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$GHCR_LEER_PAQUETE" ]]; then
+            echo "Se utilizará acceso público a GHCR."
+            exit 0
+          fi
+          [[ "$GHCR_USUARIO" =~ ^[A-Za-z0-9-]+$ ]]
+          printf '%s' "$GHCR_LEER_PAQUETE" |
+            ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              -i "$HOME/.ssh/id_ed25519" "$VPS_USER@$VPS_HOST" \
+              "if [ \$(id -u) -eq 0 ]; then docker login ghcr.io -u '$GHCR_USUARIO' --password-stdin; else sudo -n docker login ghcr.io -u '$GHCR_USUARIO' --password-stdin; fi"
+
+      - name: Aprovisionar PostgreSQL y levantar la API del ambiente
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          AMBIENTE: ${{ inputs.ambiente }}
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -i "$HOME/.ssh/id_ed25519" "$VPS_USER@$VPS_HOST" \
+            "bash -s -- '$AMBIENTE'" <<'DESPLIEGUE_REMOTO'
+          set -Eeuo pipefail
+          ambiente="${1:?Ambiente obligatorio}"
+          case "$ambiente" in dev|test|stage|prod) ;; *) exit 1 ;; esac
+          archivo="$HOME/.gestor-franquicias-bootstrap/$ambiente/entrega.tar.gz"
+          destino="/opt/gestor-franquicias/$ambiente"
+          trap 'rm -f "$archivo"' EXIT
+          test -f "$archivo"
+
+          if [[ -f "$destino/.env" ]]; then
+              nueva="$(tar -xOzf "$archivo" ./.env | sed -n 's/^DB_PASSWORD=//p')"
+              if [[ "$(id -u)" -eq 0 ]]; then
+                  existente="$(sed -n 's/^DB_PASSWORD=//p' "$destino/.env")"
+              else
+                  existente="$(sudo -n sed -n 's/^DB_PASSWORD=//p' "$destino/.env")"
+              fi
+              if [[ "$nueva" != "$existente" ]]; then
+                  echo "La contraseña de PostgreSQL cambió para $ambiente; despliegue bloqueado." >&2
+                  exit 1
+              fi
+          fi
+
+          if [[ "$(id -u)" -eq 0 ]]; then
+              install -d -m 750 "$destino"
+              tar -xzf "$archivo" -C "$destino"
+              chmod 600 "$destino/.env"
+              bash "$destino/scripts/desplegar-vps.sh" "$ambiente"
+          else
+              sudo -n install -d -m 750 "$destino"
+              sudo -n tar -xzf "$archivo" -C "$destino"
+              sudo -n chmod 600 "$destino/.env"
+              sudo -n bash "$destino/scripts/desplegar-vps.sh" "$ambiente"
+          fi
+          DESPLIEGUE_REMOTO
