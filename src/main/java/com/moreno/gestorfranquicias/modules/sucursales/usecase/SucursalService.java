@@ -1,7 +1,11 @@
 package com.moreno.gestorfranquicias.modules.sucursales.usecase;
 
-import com.moreno.gestorfranquicias.crosscutting.domain.request.*;
-import com.moreno.gestorfranquicias.crosscutting.domain.response.*;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.ActualizarNombreRequest;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.CrearSucursalRequest;
+import com.moreno.gestorfranquicias.crosscutting.domain.response.ProductoResponse;
+import com.moreno.gestorfranquicias.crosscutting.domain.response.SucursalDetalleResponse;
+import com.moreno.gestorfranquicias.crosscutting.domain.response.SucursalListadoResponse;
+import com.moreno.gestorfranquicias.crosscutting.domain.response.SucursalResumenResponse;
 import com.moreno.gestorfranquicias.crosscutting.persistence.producto.mapper.ProductoMapper;
 import com.moreno.gestorfranquicias.crosscutting.persistence.sucursal.entity.SucursalEntity;
 import com.moreno.gestorfranquicias.crosscutting.persistence.sucursal.mapper.SucursalMapper;
@@ -37,6 +41,8 @@ public class SucursalService implements ISucursalService {
         this.productoMapper = productoMapper;
     }
 
+    /** Mono: el alta corresponde a una sola sucursal. */
+    @Override
     @Transactional
     public Mono<SucursalResumenResponse> crear(Long idFranquicia, CrearSucursalRequest datos) {
         return franquicias
@@ -48,10 +54,14 @@ public class SucursalService implements ISucursalService {
                 .map(sucursalMapper::convertir);
     }
 
+    /** Flux: devuelve las sucursales disponibles. */
+    @Override
     public Flux<SucursalListadoResponse> listar() {
         return sucursales.listar().map(sucursalMapper::convertirListado);
     }
 
+    /** Mono: agrupa una sucursal y sus productos. */
+    @Override
     public Mono<SucursalDetalleResponse> consultar(Long idSucursal) {
         return buscarSucursal(idSucursal)
                 .flatMap(
@@ -69,11 +79,15 @@ public class SucursalService implements ISucursalService {
                                                                 lista)));
     }
 
+    /** Flux: una sucursal puede registrar varios productos. */
+    @Override
     public Flux<ProductoResponse> listarProductos(Long idSucursal) {
         return buscarSucursal(idSucursal)
                 .thenMany(productos.listarPorSucursal(idSucursal).map(productoMapper::convertir));
     }
 
+    /** Mono: cambia el nombre de una sucursal. */
+    @Override
     @Transactional
     public Mono<SucursalResumenResponse> cambiarNombre(
             Long idSucursal, ActualizarNombreRequest datos) {
@@ -88,6 +102,7 @@ public class SucursalService implements ISucursalService {
                 .map(sucursalMapper::convertir);
     }
 
+    /** Mono: busca la sucursal y valida que exista. */
     private Mono<SucursalEntity> buscarSucursal(Long idSucursal) {
         return sucursales
                 .buscar(idSucursal)

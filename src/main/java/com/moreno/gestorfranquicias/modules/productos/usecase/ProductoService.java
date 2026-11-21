@@ -1,6 +1,8 @@
 package com.moreno.gestorfranquicias.modules.productos.usecase;
 
-import com.moreno.gestorfranquicias.crosscutting.domain.request.*;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.ActualizarNombreRequest;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.ActualizarStockRequest;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.CrearProductoRequest;
 import com.moreno.gestorfranquicias.crosscutting.domain.response.ProductoResponse;
 import com.moreno.gestorfranquicias.crosscutting.persistence.producto.entity.ProductoEntity;
 import com.moreno.gestorfranquicias.crosscutting.persistence.producto.mapper.ProductoMapper;
@@ -29,6 +31,8 @@ public class ProductoService implements IProductoService {
         this.mapper = mapper;
     }
 
+    /** Mono: crea un producto después de validar la sucursal. */
+    @Override
     @Transactional
     public Mono<ProductoResponse> crear(Long idSucursal, CrearProductoRequest datos) {
         return sucursales
@@ -45,14 +49,20 @@ public class ProductoService implements IProductoService {
                 .map(mapper::convertir);
     }
 
+    /** Flux: la consulta puede devolver varios productos. */
+    @Override
     public Flux<ProductoResponse> listar() {
         return productos.listar().map(mapper::convertir);
     }
 
+    /** Mono: busca un producto concreto de la sucursal. */
+    @Override
     public Mono<ProductoResponse> consultar(Long idSucursal, Long idProducto) {
         return buscarProducto(idSucursal, idProducto).map(mapper::convertir);
     }
 
+    /** Mono: actualiza el stock de un único producto. */
+    @Override
     @Transactional
     public Mono<ProductoResponse> cambiarStock(
             Long idSucursal, Long idProducto, ActualizarStockRequest datos) {
@@ -69,6 +79,8 @@ public class ProductoService implements IProductoService {
                 .map(mapper::convertir);
     }
 
+    /** Mono: cambia el nombre de un producto. */
+    @Override
     @Transactional
     public Mono<ProductoResponse> cambiarNombre(
             Long idSucursal, Long idProducto, ActualizarNombreRequest datos) {
@@ -85,11 +97,14 @@ public class ProductoService implements IProductoService {
                 .map(mapper::convertir);
     }
 
+    /** Mono<Void>: elimina el registro sin devolver un cuerpo. */
+    @Override
     @Transactional
     public Mono<Void> eliminar(Long idSucursal, Long idProducto) {
         return buscarProducto(idSucursal, idProducto).flatMap(productos::eliminar);
     }
 
+    /** Mono: comprueba que el producto pertenezca a la sucursal. */
     private Mono<ProductoEntity> buscarProducto(Long idSucursal, Long idProducto) {
         return productos
                 .buscar(idProducto)
