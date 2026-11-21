@@ -50,7 +50,9 @@ mvn clean verify
 
 ## Ejecución y despliegue
 
-El [README principal](../README.md#ejecutar-localmente) incluye la ejecución local con Docker Compose y con Java 21/Maven.
+El [README principal](../README.md#ejecutar-localmente) incluye la ejecución local con Docker Compose y con Java 21/Maven. Docker Compose ofrece credenciales predeterminadas exclusivas para desarrollo, de forma que el proyecto se inicia sin crear `.env`. Los scripts de inicio Maven utilizan esos mismos valores o las variables definidas por el desarrollador.
+
+Los contratos de las rutas y sus respuestas están en [Ejemplos de la API](EJEMPLOS_API.md). Los archivos que intervienen en la compilación, publicación de imágenes y despliegue se detallan en [Despliegue y GitHub Actions](DESPLIEGUE.md).
 
 En el VPS solo se despliega el perfil `prod` desde `main`. Terraform prepara la red, el volumen y PostgreSQL; Docker Compose ejecuta la API. Los perfiles `dev`, `test` y `stage` se validan en CI, pero no están desplegados en el VPS.
 
