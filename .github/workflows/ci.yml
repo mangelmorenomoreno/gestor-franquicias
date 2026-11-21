@@ -65,6 +65,11 @@ jobs:
           grep -Fq 'needs: publicar' .github/workflows/publicar-imagen.yml
           grep -Fq "github.event.workflow_run.head_branch == 'main'" .github/workflows/publicar-imagen.yml
           grep -Fq 'revision: ${{ github.event.workflow_run.head_sha }}' .github/workflows/publicar-imagen.yml
+          # Producción se expone por IP pública; otros ambientes permanecen locales.
+          grep -Fq 'IP_ESCUCHA_API=0.0.0.0' .github/workflows/_desplegar-ambiente.yml
+          grep -Fq 'IP_ESCUCHA_API=127.0.0.1' .github/workflows/_desplegar-ambiente.yml
+          grep -Fq 'ip_escucha_esperada=0.0.0.0' scripts/desplegar-vps.sh
+          grep -Fq '${IP_ESCUCHA_API:-0.0.0.0}:${PUERTO_API:-8088}:8080' docker-compose.prod.yml
           for ambiente in dev test stage prod; do
             test -f "src/main/resources/application-$ambiente.yml"
             test -f "docker-compose.$ambiente.yml"
@@ -77,6 +82,8 @@ jobs:
           IMAGEN_BACKEND: gestor-franquicias:validacion
         run: |
           docker compose -f docker-compose.yml config -q
+          IP_ESCUCHA_API=0.0.0.0 docker compose -f docker-compose.prod.yml config --format json \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); p=d["services"]["api"]["ports"]; assert any(x.get("host_ip")=="0.0.0.0" and str(x.get("published"))=="8088" for x in p)'
           for ambiente in dev test stage prod; do
             echo "Validando Docker Compose: $ambiente"
             docker compose -f "docker-compose.$ambiente.yml" config -q
