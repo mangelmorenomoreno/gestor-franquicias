@@ -3,4 +3,4 @@ import com.moreno.gestorfranquicias.crosscutting.persistence.sucursal.entity.Suc
 import com.moreno.gestorfranquicias.crosscutting.domain.response.ProductoMayorStockResponse;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
-public interface ISucursalDataProvider { Mono<SucursalEntity> buscar(Long idSucursal); Flux<SucursalEntity> listarPorFranquicia(Long idFranquicia); Mono<SucursalEntity> guardar(SucursalEntity sucursal); }
+public interface ISucursalDataProvider { Mono<SucursalEntity> buscar(Long idSucursal); Flux<SucursalEntity> listarPorFranquicia(Long idFranquicia); Flux<SucursalEntity> listar(); Mono<SucursalEntity> guardar(SucursalEntity sucursal); }

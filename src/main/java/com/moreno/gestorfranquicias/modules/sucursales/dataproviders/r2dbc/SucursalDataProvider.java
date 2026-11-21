@@ -10,6 +10,7 @@ public class SucursalDataProvider implements ISucursalDataProvider {
     private final SucursalRepository repositorio;
     public SucursalDataProvider(SucursalRepository repositorio) { this.repositorio = repositorio; }
     public Mono<SucursalEntity> buscar(Long idSucursal) { return repositorio.findById(idSucursal); }
+    public Flux<SucursalEntity> listar() { return repositorio.findAllByOrderByIdSucursalAsc(); }
     public Flux<SucursalEntity> listarPorFranquicia(Long idFranquicia) {
         return repositorio.findByIdFranquiciaOrderByIdSucursalAsc(idFranquicia);
     }

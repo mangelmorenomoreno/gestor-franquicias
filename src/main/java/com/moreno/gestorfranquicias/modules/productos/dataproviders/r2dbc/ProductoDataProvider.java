@@ -18,6 +18,7 @@ public class ProductoDataProvider implements IProductoDataProvider {
     }
 
     public Mono<ProductoEntity> buscar(Long idProducto) { return repositorio.findById(idProducto); }
+    public Flux<ProductoEntity> listar() { return repositorio.findAllByOrderByIdProductoAsc(); }
     public Flux<ProductoEntity> listarPorSucursal(Long idSucursal) {
         return repositorio.findByIdSucursalOrderByIdProductoAsc(idSucursal);
     }
