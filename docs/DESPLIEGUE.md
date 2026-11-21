@@ -1,88 +1,89 @@
-# Despliegue automatizado en el VPS
+# Despliegue por ambientes mediante GitHub Actions
 
-La aplicación dispone de un workflow manual de GitHub Actions que automatiza la preparación del servidor y la puesta en marcha de la API. Una vez activado desde la rama `main`, la ejecución transfiere los archivos, instala Terraform si hace falta, inicializa y aplica la infraestructura exclusiva de este proyecto, descarga la imagen versionada desde GHCR, inicia el contenedor y comprueba el endpoint de salud.
+La API Gestor de Franquicias dispone de cuatro ambientes aislados para probar cambios sin modificar la base de datos de producción. Todos utilizan Java 21, Spring Boot, R2DBC, Flyway, Docker y Terraform. El aprovisionamiento en el VPS es **manual mediante GitHub Actions**: no se ejecuta por un push ni por un merge. Los despliegues al VPS aún no se han realizado.
 
-El despliegue **no se ha ejecutado todavía** en el VPS. La automatización solo se utilizará cuando el propietario haya configurado el acceso SSH y los secretos correspondientes.
+## Ambientes, conexiones y perfiles
 
-## Requisitos del servidor
+| Ambiente | Rama | Entorno GitHub | Perfil Spring | Puerto local VPS | Directorio del VPS |
+|---|---|---|---|---|---|
+| Desarrollo | `dev` | `desarrollo` | `dev` | 8086 | `/opt/gestor-franquicias/dev` |
+| Pruebas | `test` | `pruebas` | `test` | 8087 | `/opt/gestor-franquicias/test` |
+| Preproducción | `stage` | `preproduccion` | `stage` | 8089 | `/opt/gestor-franquicias/stage` |
+| Producción | `main` | `produccion` | `prod` | 8088 | `/opt/gestor-franquicias/prod` |
 
-- Ubuntu 26.04.1 LTS en arquitectura amd64.
-- Docker Engine y Docker Compose instalados y funcionales.
-- Acceso saliente a `apt.releases.hashicorp.com`, `registry.terraform.io`, Docker Hub y `ghcr.io`.
-- Acceso SSH de un usuario con permisos de `root` o `sudo -n` para instalar Terraform y administrar los recursos Docker.
-- Puerto local 8088 disponible.
+**Primero se configura y verifica `dev`; los demás ambientes se activan después de aprobar sus comprobaciones.**
 
-Terraform se instala automáticamente desde el repositorio oficial de HashiCorp únicamente cuando no está instalado, verificando la huella del certificado de firma del repositorio. No se modifican contenedores, redes, volúmenes o directorios ajenos a Gestor de Franquicias.
+Cada ambiente conserva su propio estado Terraform, red Docker, contenedor PostgreSQL 16, volumen persistente y contenedor Spring Boot. Todos pueden llamar a su base `gestor_franquicias` porque son instancias independientes; la dirección `base-datos` se resuelve únicamente dentro de la red correspondiente.
 
-## Configuración inicial en GitHub
+| Perfil | Red privada | Contenedor PostgreSQL | Volumen de datos |
+|---|---|---|---|
+| dev | `gestor-franquicias-dev-red` | `gestor-franquicias-dev-postgres` | `gestor-franquicias-dev-datos` |
+| test | `gestor-franquicias-test-red` | `gestor-franquicias-test-postgres` | `gestor-franquicias-test-datos` |
+| stage | `gestor-franquicias-stage-red` | `gestor-franquicias-stage-postgres` | `gestor-franquicias-stage-datos` |
+| prod | `gestor-franquicias-prod-red` | `gestor-franquicias-prod-postgres` | `gestor-franquicias-prod-datos` |
 
-Abrir `Settings → Environments` y crear el entorno `produccion`. Configurar las siguientes entradas como **secrets** del entorno:
+Los archivos `src/main/resources/application-dev.yml`, `application-test.yml`, `application-stage.yml` y `application-prod.yml` personalizan Spring Boot. Los archivos `docker-compose.dev.yml`, `docker-compose.test.yml`, `docker-compose.stage.yml` y `docker-compose.prod.yml` inyectan `SPRING_PROFILES_ACTIVE`, las URLs de R2DBC y Flyway, el usuario y la contraseña para la base de su propia red.
+
+## Flujo correcto
+
+La integración sigue `feature/* → dev → test → stage → main` mediante Pull Requests. El workflow `Validación backend` ejecuta las pruebas con Testcontainers y arranca la aplicación en Docker con los perfiles `dev`, `test`, `stage` y `prod` para comprobar la conexión, Flyway, lectura, escritura y persistencia.
+
+El workflow `Publicar imagen Docker` publica una etiqueta inmutable con el SHA del commit de cada rama permanente **solamente después de CI exitoso**. La etiqueta `latest` se actualiza únicamente desde `main`; no se utiliza para despliegues.
+
+Los cuatro workflows de despliegue manual son:
+
+- `Desplegar dev en el VPS` desde la rama `dev`.
+- `Desplegar test en el VPS` desde la rama `test`.
+- `Desplegar stage en el VPS` desde la rama `stage`.
+- `Desplegar prod en el VPS` desde la rama `main`.
+
+Todos llaman al workflow reutilizable `_desplegar-ambiente.yml`, que valida secretos, transfiere únicamente los archivos del ambiente seleccionado y ejecuta `scripts/desplegar-vps.sh` con el nombre de dicho ambiente.
+
+## Configuración inicial de secretos
+
+Crear los ambientes en `Settings → Environments`: `desarrollo`, `pruebas`, `preproduccion` y `produccion`. Asignar a cada uno su rama autorizada y sus secretos:
 
 | Secreto | Contenido |
 |---|---|
-| `VPS_HOST` | IP o nombre DNS del VPS |
-| `VPS_USER` | Usuario para la conexión SSH |
-| `VPS_SSH_KEY` | Clave privada SSH con autorización en el VPS |
-| `VPS_KNOWN_HOSTS` | Clave pública del host SSH verificada previamente |
-| `DB_PASSWORD` | Contraseña aleatoria de PostgreSQL, mínimo 20 caracteres; letras, números, guion o guion bajo |
+| `VPS_HOST` | IP o DNS auténtico del VPS |
+| `VPS_USER` | Usuario SSH autorizado para desplegar |
+| `VPS_SSH_KEY` | Clave privada SSH de ese usuario |
+| `VPS_KNOWN_HOSTS` | Llave pública de host verificada antes de guardarla |
+| `DB_PASSWORD` | Contraseña distinta por ambiente, mínimo 20 caracteres alfanuméricos, guiones o guiones bajos |
 
-Para generar una contraseña segura en una terminal local:
+Si GHCR es privado, también configurar `GHCR_USUARIO` y `GHCR_LEER_PAQUETE` (token con `read:packages`). Las credenciales SSH pueden ser las mismas si se utiliza el mismo VPS, pero **las contraseñas de base de datos deben ser diferentes**.
+
+Para generar una clave segura en una terminal privada:
 
 ~~~bash
 openssl rand -hex 32
 ~~~
 
-No pegar la contraseña ni la clave privada SSH en el repositorio, en un issue ni en un chat. `VPS_KNOWN_HOSTS` debe comprobarse contra la huella auténtica del servidor antes de introducirla en GitHub.
+No subir contraseñas, llaves SSH privadas ni archivos `.env` a Git ni compartirlos en la conversación.
 
-Si la imagen de GHCR es privada, configurar además `GHCR_USUARIO` y `GHCR_LEER_PAQUETE` (token con permiso `read:packages`). El workflow utiliza estas credenciales únicamente cuando están disponibles. Si la imagen es pública, no hacen falta.
+## Primer despliegue: desarrollo
 
-Se recomienda activar la aprobación del entorno `produccion` si el plan de GitHub y la configuración del repositorio lo permiten.
+1. Revisar que el CI de `dev` y la publicación de su SHA en GHCR finalizaron correctamente.
+2. Configurar los secretos del entorno GitHub `desarrollo` y comprobar el acceso SSH sin compartir contraseñas.
+3. En GitHub abrir `Actions → Desplegar dev en el VPS → Run workflow` y seleccionar la rama `dev`.
+4. Confirmar que la ejecución instala Terraform si hace falta, inicializa el estado en `/opt/gestor-franquicias/dev/infra/terraform`, aplica el plan validado, conecta Spring Boot al PostgreSQL de `dev` y obtiene `UP` en `/actuator/health`.
+5. Revisar Swagger desde el VPS en `http://127.0.0.1:8086/swagger-ui.html`. El puerto no se publica por Internet por defecto.
 
-## Primera ejecución
-
-1. Confirmar que el workflow `Validación backend` terminó correctamente en `main`.
-2. Confirmar que el workflow `Publicar imagen Docker` publicó la etiqueta correspondiente al último SHA de `main`.
-3. Abrir `Actions → Desplegar API en el VPS → Run workflow`, con la rama `main`.
-4. Aprobar la ejecución cuando el entorno lo solicite y revisar el resultado final.
-
-La instalación inicial ya no requiere escribir los comandos `apt`, `terraform init`, `terraform plan` o `terraform apply` manualmente en la consola del VPS. El workflow los ejecuta en orden bajo la autorización del usuario.
-
-## Recursos que administra Terraform
-
-- Red Docker: `gestor-franquicias-red`.
-- Volumen de PostgreSQL: `gestor-franquicias-datos`.
-- Contenedor PostgreSQL: `gestor-franquicias-postgres`.
-- Imagen de PostgreSQL 16.
-
-Docker Compose administra únicamente el servicio `api` de este proyecto; el puerto está vinculado a `127.0.0.1:8088` por seguridad y el contenedor de PostgreSQL no publica un puerto al exterior.
-
-La configuración y el estado de Terraform se conservan en `/opt/gestor-franquicias`. El estado puede incluir valores sensibles y debe tener permisos restringidos. No se debe eliminar `terraform.tfstate` ni ejecutar `terraform destroy` sin revisar las consecuencias.
-
-El workflow verifica que los cambios afecten solo a los recursos Terraform definidos para esta aplicación y rechaza cualquier plan que elimine el volumen persistente.
-
-## Verificar despliegue
-
-El workflow valida la salud de la API después del despliegue. Para verificarla de manera adicional desde el propio VPS:
+Para consultar sin cambiar nada:
 
 ~~~bash
-curl -fsS http://127.0.0.1:8088/actuator/health
-docker ps --filter name=gestor-franquicias
-cd /opt/gestor-franquicias
-docker compose -p gestor-franquicias --env-file .env -f docker-compose.prod.yml ps
+curl -fsS http://127.0.0.1:8086/actuator/health
+docker ps --filter name=gestor-franquicias-dev
 ~~~
 
-Swagger UI estará disponible dentro del servidor en `http://127.0.0.1:8088/swagger-ui.html`, mientras el puerto siga ligado a localhost.
+Después de validar desarrollo, configurar y ejecutar `test`, `stage` y `prod` en ese orden, cada uno mediante su propio workflow y su etiqueta de imagen.
 
-La API **no se expone a Internet automáticamente** porque el enunciado no requiere autenticación. Para que un evaluador remoto acceda a Swagger, se debe configurar primero un proxy HTTPS o una regla de firewall que limite las direcciones autorizadas. Los puertos 80 y 443 pueden estar en uso por otros servicios; no se modifican aquí.
+## Aislamiento, estado y seguridad
 
-## Limitaciones y medidas de seguridad
+El despliegue crea los archivos en `/opt/gestor-franquicias/<ambiente>` y guarda el estado Terraform por separado. El plan impide eliminar volúmenes PostgreSQL y rechaza cambios a direcciones de recursos que no pertenezcan a la configuración. No se ejecuta `terraform destroy` automáticamente.
 
-- La conexión SSH y los secretos deben configurarse una sola vez. Sin estos accesos la automatización no puede modificar el VPS.
-- Una contraseña `DB_PASSWORD` ya utilizada debe conservarse entre despliegues; cambiarla en el archivo de entorno no cambia automáticamente la contraseña interna de PostgreSQL.
-- No se permite eliminar el volumen de PostgreSQL mediante este flujo. Hacer copias de seguridad antes de actualizar sistemas con datos relevantes.
-- La publicación en GHCR y el despliegue en el VPS son acciones separadas; publicar una imagen no significa que la API ya esté desplegada.
-- El estado Terraform está almacenado localmente en el VPS, no en GitHub Actions. Es necesario conservarlo y respaldarlo.
+Terraform se instalará desde el repositorio oficial firmado si no está disponible. Si la base ya tiene información, la automatización rechaza modificar la contraseña PostgreSQL por accidente. Los archivos `.env` y `terraform.tfstate` son privados; hacer copia de seguridad del estado y de los datos antes de operaciones críticas.
 
-## Retirar la instalación
+Los cuatro puertos del VPS se enlazan inicialmente a `127.0.0.1`, evitando exponer una API sin autenticación. Para dar acceso remoto a Swagger hay que configurar un proxy seguro o acceso restringido por firewall. No se modifican los puertos ni los contenedores de otras aplicaciones alojadas en el servidor.
 
-La eliminación de recursos requiere una intervención explícita y una comprobación del estado de PostgreSQL. No existe un workflow de eliminación automática. Nunca ejecutar comandos generales como `docker system prune --volumes` en este servidor compartido.
+**Estado del despliegue:** los recursos, scripts y workflows se preparan en el repositorio, pero todavía se requiere conectar GitHub al VPS y ejecutar el primer despliegue real. No se debe afirmar que los cuatro ambientes están instalados hasta verificar sus resultados.
