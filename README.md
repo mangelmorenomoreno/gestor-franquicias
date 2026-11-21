@@ -556,6 +556,18 @@ mvn spring-boot:run
 
 Sustituya `CLAVE_ESTABLECIDA_EN_ENV` por el valor de `DB_PASSWORD` de su archivo local. Spring Boot utiliza el perfil `dev` por defecto y escucha en `http://localhost:8080` cuando arranca mediante Maven (la publicación en `8088` corresponde a Docker Compose). La documentación estará en `http://localhost:8080/swagger-ui/index.html`.
 
+### Convenciones de código y formato Java
+
+Los archivos Java se organizan con sangría de **cuatro espacios**, declaraciones y métodos separados, e importaciones ordenadas. Se utiliza el formato estándar de Google Java Format en variante AOSP, gestionado mediante `fmt-maven-plugin` 2.29. Las preferencias básicas de editor están en `.editorconfig`.
+
+Para aplicar el formato antes de registrar un cambio:
+
+~~~bash
+mvn com.spotify.fmt:fmt-maven-plugin:2.29:format
+~~~
+
+El comando `mvn clean verify` comprueba además que el código respete este formato y ejecuta las pruebas. El formateo no modifica el comportamiento esperado de los endpoints; cualquier cambio funcional debe revisarse y validarse por separado.
+
 ### Ejecución de pruebas y revisión de calidad
 
 Con Docker en ejecución (Testcontainers utiliza una base PostgreSQL temporal):

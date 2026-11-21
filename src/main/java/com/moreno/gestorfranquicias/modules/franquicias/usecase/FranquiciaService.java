@@ -7,10 +7,12 @@ import com.moreno.gestorfranquicias.crosscutting.persistence.franquicia.mapper.F
 import com.moreno.gestorfranquicias.crosscutting.persistence.sucursal.mapper.SucursalMapper;
 import com.moreno.gestorfranquicias.infrastructure.exception.ExcepcionNegocio;
 import com.moreno.gestorfranquicias.modules.franquicias.dataproviders.IFranquiciaDataProvider;
-import com.moreno.gestorfranquicias.modules.sucursales.dataproviders.ISucursalDataProvider;
 import com.moreno.gestorfranquicias.modules.productos.dataproviders.IProductoDataProvider;
+import com.moreno.gestorfranquicias.modules.sucursales.dataproviders.ISucursalDataProvider;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -22,8 +24,12 @@ public class FranquiciaService implements IFranquiciaService {
     private final FranquiciaMapper franquiciaMapper;
     private final SucursalMapper sucursalMapper;
 
-    public FranquiciaService(IFranquiciaDataProvider franquicias, ISucursalDataProvider sucursales,
-            IProductoDataProvider productos, FranquiciaMapper franquiciaMapper, SucursalMapper sucursalMapper) {
+    public FranquiciaService(
+            IFranquiciaDataProvider franquicias,
+            ISucursalDataProvider sucursales,
+            IProductoDataProvider productos,
+            FranquiciaMapper franquiciaMapper,
+            SucursalMapper sucursalMapper) {
         this.franquicias = franquicias;
         this.sucursales = sucursales;
         this.productos = productos;
@@ -33,7 +39,8 @@ public class FranquiciaService implements IFranquiciaService {
 
     @Transactional
     public Mono<FranquiciaResumenResponse> crear(CrearFranquiciaRequest datos) {
-        return franquicias.guardar(new FranquiciaEntity(null, datos.nombre().trim()))
+        return franquicias
+                .guardar(new FranquiciaEntity(null, datos.nombre().trim()))
                 .map(franquiciaMapper::convertir);
     }
 
@@ -43,16 +50,26 @@ public class FranquiciaService implements IFranquiciaService {
 
     public Mono<FranquiciaDetalleResponse> consultar(Long idFranquicia) {
         return buscarFranquicia(idFranquicia)
-                .flatMap(franquicia -> sucursales.listarPorFranquicia(idFranquicia)
-                        .map(sucursalMapper::convertir)
-                        .collectList()
-                        .map(lista -> new FranquiciaDetalleResponse(
-                                franquicia.idFranquicia(), franquicia.nombre(), lista)));
+                .flatMap(
+                        franquicia ->
+                                sucursales
+                                        .listarPorFranquicia(idFranquicia)
+                                        .map(sucursalMapper::convertir)
+                                        .collectList()
+                                        .map(
+                                                lista ->
+                                                        new FranquiciaDetalleResponse(
+                                                                franquicia.idFranquicia(),
+                                                                franquicia.nombre(),
+                                                                lista)));
     }
 
     public Flux<SucursalResumenResponse> listarSucursales(Long idFranquicia) {
         return buscarFranquicia(idFranquicia)
-                .thenMany(sucursales.listarPorFranquicia(idFranquicia).map(sucursalMapper::convertir));
+                .thenMany(
+                        sucursales
+                                .listarPorFranquicia(idFranquicia)
+                                .map(sucursalMapper::convertir));
     }
 
     public Flux<ProductoMayorStockResponse> obtenerMayorStock(Long idFranquicia) {
@@ -61,14 +78,20 @@ public class FranquiciaService implements IFranquiciaService {
     }
 
     @Transactional
-    public Mono<FranquiciaResumenResponse> cambiarNombre(Long idFranquicia, ActualizarNombreRequest datos) {
+    public Mono<FranquiciaResumenResponse> cambiarNombre(
+            Long idFranquicia, ActualizarNombreRequest datos) {
         return buscarFranquicia(idFranquicia)
-                .flatMap(actual -> franquicias.guardar(new FranquiciaEntity(actual.idFranquicia(), datos.nombre().trim())))
+                .flatMap(
+                        actual ->
+                                franquicias.guardar(
+                                        new FranquiciaEntity(
+                                                actual.idFranquicia(), datos.nombre().trim())))
                 .map(franquiciaMapper::convertir);
     }
 
     private Mono<FranquiciaEntity> buscarFranquicia(Long idFranquicia) {
-        return franquicias.buscar(idFranquicia)
+        return franquicias
+                .buscar(idFranquicia)
                 .switchIfEmpty(Mono.error(ExcepcionNegocio.noEncontrado("La franquicia")));
     }
 }
