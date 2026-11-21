@@ -69,6 +69,8 @@ jobs:
           grep -Fq 'IP_ESCUCHA_API=0.0.0.0' .github/workflows/_desplegar-ambiente.yml
           grep -Fq 'IP_ESCUCHA_API=127.0.0.1' .github/workflows/_desplegar-ambiente.yml
           grep -Fq 'ip_escucha_esperada=0.0.0.0' scripts/desplegar-vps.sh
+          grep -Fq 'Comprobar Swagger y salud desde Internet' .github/workflows/_desplegar-ambiente.yml
+          grep -Fq 'imagen_actual=' scripts/desplegar-vps.sh
           grep -Fq '${IP_ESCUCHA_API:-0.0.0.0}:${PUERTO_API:-8088}:8080' docker-compose.prod.yml
           for ambiente in dev test stage prod; do
             test -f "src/main/resources/application-$ambiente.yml"
