@@ -15,9 +15,14 @@ on:
       entorno_github:
         required: true
         type: string
+      revision:
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: gestor-franquicias-despliegue-${{ inputs.ambiente }}
@@ -30,8 +35,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - name: Obtener código de la rama seleccionada
+      - name: Obtener código de la revisión validada
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision || github.sha }}
 
       - name: Validar acceso al VPS y configuración del ambiente
         env:
@@ -40,6 +47,7 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SHA_DESPLIEGUE: ${{ inputs.revision || github.sha }}
           AMBIENTE: ${{ inputs.ambiente }}
         run: |
           set -euo pipefail
@@ -50,6 +58,7 @@ jobs:
           [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
           [[ "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
           [[ "$DB_PASSWORD" =~ ^[A-Za-z0-9_-]{20,}$ ]]
+          [[ "$SHA_DESPLIEGUE" =~ ^[0-9a-f]{40}$ ]]
           test -f "docker-compose.$AMBIENTE.yml"
 
       - name: Configurar SSH con verificación del servidor
@@ -66,6 +75,7 @@ jobs:
       - name: Empaquetar recursos del ambiente sin guardar secretos en Git
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SHA_DESPLIEGUE: ${{ inputs.revision || github.sha }}
           AMBIENTE: ${{ inputs.ambiente }}
           PUERTO: ${{ inputs.puerto }}
         run: |
@@ -78,7 +88,7 @@ jobs:
           {
             printf 'DB_USERNAME=gestor_franquicias\n'
             printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
-            printf 'IMAGEN_BACKEND=ghcr.io/mangelmorenomoreno/gestor-franquicias:%s\n' "$GITHUB_SHA"
+            printf 'IMAGEN_BACKEND=ghcr.io/mangelmorenomoreno/gestor-franquicias:%s\n' "$SHA_DESPLIEGUE"
             printf 'PUERTO_API=%s\n' "$PUERTO"
             printf 'IP_ESCUCHA_API=127.0.0.1\n'
           } > "$RUNNER_TEMP/entrega/.env"
@@ -100,23 +110,22 @@ jobs:
             "$RUNNER_TEMP/gestor-franquicias-entrega.tar.gz" \
             "$remoto:.gestor-franquicias-bootstrap/$AMBIENTE/entrega.tar.gz"
 
-      - name: Autenticar en GHCR si la imagen es privada
+      - name: Autenticar exclusivamente el despliegue en GHCR
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          GHCR_USUARIO: ${{ secrets.GHCR_USUARIO }}
-          GHCR_LEER_PAQUETE: ${{ secrets.GHCR_LEER_PAQUETE }}
+          GHCR_USUARIO: ${{ secrets.GHCR_USUARIO || github.repository_owner }}
+          GHCR_LEER_PAQUETE: ${{ secrets.GHCR_LEER_PAQUETE || github.token }}
         run: |
           set -euo pipefail
-          if [[ -z "$GHCR_LEER_PAQUETE" ]]; then
-            echo "Se utilizará acceso público a GHCR."
-            exit 0
-          fi
+          # GITHUB_TOKEN permite leer el paquete sin exigir un PAT adicional.
+          # DOCKER_CONFIG aislado evita alterar las sesiones GHCR de otras aplicaciones.
           [[ "$GHCR_USUARIO" =~ ^[A-Za-z0-9-]+$ ]]
+          test -n "$GHCR_LEER_PAQUETE"
           printf '%s' "$GHCR_LEER_PAQUETE" |
             ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
               -i "$HOME/.ssh/id_ed25519" "$VPS_USER@$VPS_HOST" \
-              "if [ \$(id -u) -eq 0 ]; then docker login ghcr.io -u '$GHCR_USUARIO' --password-stdin; else sudo -n docker login ghcr.io -u '$GHCR_USUARIO' --password-stdin; fi"
+              "sudo -n install -d -m 700 /run/gestor-franquicias-ghcr && sudo -n env DOCKER_CONFIG=/run/gestor-franquicias-ghcr docker login ghcr.io -u '$GHCR_USUARIO' --password-stdin"
 
       - name: Aprovisionar PostgreSQL y levantar la API del ambiente
         env:
@@ -161,3 +170,15 @@ jobs:
               sudo -n bash "$destino/scripts/desplegar-vps.sh" "$ambiente"
           fi
           DESPLIEGUE_REMOTO
+
+      - name: Eliminar autenticación GHCR temporal
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          # Limpiar credenciales efímeras incluso cuando falle Terraform o la API.
+          ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -i "$HOME/.ssh/id_ed25519" "$VPS_USER@$VPS_HOST" \
+            "sudo -n rm -f /run/gestor-franquicias-ghcr/config.json && sudo -n rmdir /run/gestor-franquicias-ghcr" || true

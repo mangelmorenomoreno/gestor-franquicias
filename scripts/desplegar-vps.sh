@@ -21,6 +21,8 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 cd "$directorio"
+# Credenciales de GHCR efímeras, aisladas de las apps del VPS que usan Docker.
+export DOCKER_CONFIG=/run/gestor-franquicias-ghcr
 test -f .env
 test -f "$compose"
 test -f infra/terraform/main.tf
@@ -46,6 +48,9 @@ if ! command -v terraform >/dev/null 2>&1; then
   keyring="/usr/share/keyrings/hashicorp-archive-keyring.gpg"
   curl -fsSL https://apt.releases.hashicorp.com/gpg \
     | gpg --batch --yes --dearmor -o "$keyring"
+  # apt ejecuta gpgv sin privilegios y debe poder leer el keyring público.
+  # El script mantiene umask 077 para proteger secretos en disco.
+  chmod 0644 "$keyring"
   fingerprint="$(gpg --no-default-keyring --keyring "$keyring" \
     --with-colons --fingerprint | awk -F: '$1 == "fpr" {print $10; exit}')"
   if [[ "$fingerprint" != "D55C0D1AC78A8D8126CB631CFC9CA96ACA026560" ]]; then

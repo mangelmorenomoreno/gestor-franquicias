@@ -50,6 +50,12 @@ jobs:
         run: |
           bash -n scripts/desplegar-vps.sh
           bash -n scripts/validar-contenedor.sh
+          # Evitar regresión: apt debe leer la clave pública incluso con umask 077.
+          grep -Fq 'chmod 0644 "$keyring"' scripts/desplegar-vps.sh
+          # Evitar desplegar al abrir PR o desde ramas distintas de main.
+          grep -Fq 'needs: publicar' .github/workflows/publicar-imagen.yml
+          grep -Fq "github.event.workflow_run.head_branch == 'main'" .github/workflows/publicar-imagen.yml
+          grep -Fq 'revision: ${{ github.event.workflow_run.head_sha }}' .github/workflows/publicar-imagen.yml
           for ambiente in dev test stage prod; do
             test -f "src/main/resources/application-$ambiente.yml"
             test -f "docker-compose.$ambiente.yml"

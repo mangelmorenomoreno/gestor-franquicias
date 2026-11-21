@@ -1,6 +1,6 @@
 # Despliegue por ambientes mediante GitHub Actions
 
-La API Gestor de Franquicias dispone de cuatro ambientes aislados para probar cambios sin modificar la base de datos de producción. Todos utilizan Java 21, Spring Boot, R2DBC, Flyway, Docker y Terraform. El aprovisionamiento en el VPS es **manual mediante GitHub Actions**: no se ejecuta por un push ni por un merge. Los despliegues al VPS aún no se han realizado.
+La API Gestor de Franquicias dispone de cuatro ambientes aislados para probar cambios sin modificar la base de datos de producción. Todos utilizan Java 21, Spring Boot, R2DBC, Flyway, Docker y Terraform. Los ambientes se prueban por separado en GitHub Actions, pero **solo producción se instala en el VPS**. Cada PR fusionado a `main` inicia CI; si este pasa, se publica la imagen Docker del commit validado y se despliega `prod` automáticamente. Abrir un PR no despliega.
 
 ## Ambientes, conexiones y perfiles
 
@@ -11,7 +11,7 @@ La API Gestor de Franquicias dispone de cuatro ambientes aislados para probar ca
 | Preproducción | `stage` | `preproduccion` | `stage` | 8089 | `/opt/gestor-franquicias/stage` |
 | Producción | `main` | `produccion` | `prod` | 8088 | `/opt/gestor-franquicias/prod` |
 
-**Primero se configura y verifica `dev`; los demás ambientes se activan después de aprobar sus comprobaciones.**
+**En el VPS únicamente se despliega `prod`.** Los perfiles de `dev`, `test` y `stage` siguen probándose en CI y no se instalan en el servidor en este flujo.
 
 Cada ambiente conserva su propio estado Terraform, red Docker, contenedor PostgreSQL 16, volumen persistente y contenedor Spring Boot. Todos pueden llamar a su base `gestor_franquicias` porque son instancias independientes; la dirección `base-datos` se resuelve únicamente dentro de la red correspondiente.
 
@@ -32,7 +32,9 @@ El workflow `Publicar imagen Docker` publica una etiqueta inmutable con el SHA d
 
 La primera vez que se habilite esta configuración, puede que una rama todavía no tenga su imagen publicada con el SHA actual. En ese caso se debe ejecutar una sola vez `Actions → Publicar imagen Docker → Run workflow` seleccionando dicha rama. La publicación manual también ejecuta las pruebas Maven antes de subir la imagen; en integraciones posteriores la publicación ocurre automáticamente tras CI exitoso.
 
-Los cuatro workflows de despliegue manual son:
+La secuencia automática es **merge a main → validación backend exitosa → publicación GHCR exitosa → despliegue prod → healthcheck**. El job `desplegar_produccion` se ejecuta tras `publicar`, solo si la validación original corresponde a la rama `main`. Se pasa al despliegue el SHA exacto de esa validación para evitar usar un commit distinto. Ni un PR abierto ni una publicación manual desencadenan automáticamente el despliegue.
+
+Siguen existiendo workflows manuales, pero en este servidor únicamente debe ejecutarse producción. Los workflows disponibles son:
 
 - `Desplegar dev en el VPS` desde la rama `dev`.
 - `Desplegar test en el VPS` desde la rama `test`.
@@ -63,22 +65,22 @@ openssl rand -hex 32
 
 No subir contraseñas, llaves SSH privadas ni archivos `.env` a Git ni compartirlos en la conversación.
 
-## Primer despliegue: desarrollo
+## Despliegue de producción
 
-1. Revisar que el CI de `dev` y la publicación de su SHA en GHCR finalizaron correctamente.
-2. Configurar los secretos del entorno GitHub `desarrollo` y comprobar el acceso SSH sin compartir contraseñas.
-3. En GitHub abrir `Actions → Desplegar dev en el VPS → Run workflow` y seleccionar la rama `dev`.
-4. Confirmar que la ejecución instala Terraform si hace falta, inicializa el estado en `/opt/gestor-franquicias/dev/infra/terraform`, aplica el plan validado, conecta Spring Boot al PostgreSQL de `dev` y obtiene `UP` en `/actuator/health`.
-5. Revisar Swagger desde el VPS en `http://127.0.0.1:8086/swagger-ui.html`. El puerto no se publica por Internet por defecto.
+1. En GitHub Environments, configurar `produccion` con acceso desde `main` y sus secretos SSH/PostgreSQL.
+2. Crear un PR a `main`, revisarlo y fusionarlo. El push del merge activa el CI. Ante un error, no se publicará ni desplegará.
+3. El workflow `Publicar imagen Docker` publica el SHA validado en GHCR y, si corresponde a `main`, llama al despliegue de producción.
+4. Terraform inicializa la red, volumen y PostgreSQL exclusivos de `prod`; la API se inicia en el puerto privado `127.0.0.1:8088`.
+5. El despliegue verifica `/actuator/health`, conexión R2DBC y migraciones Flyway.
 
-Para consultar sin cambiar nada:
+Para relanzar manualmente sin nuevo commit: `Actions → Desplegar prod en el VPS → Run workflow` (rama `main`). Desde el VPS:
 
 ~~~bash
-curl -fsS http://127.0.0.1:8086/actuator/health
-docker ps --filter name=gestor-franquicias-dev
+curl -fsS http://127.0.0.1:8088/actuator/health
+docker ps --filter name=gestor-franquicias-prod
 ~~~
 
-Después de validar desarrollo, configurar y ejecutar `test`, `stage` y `prod` en ese orden, cada uno mediante su propio workflow y su etiqueta de imagen.
+El archivo de claves públicas de HashiCorp se instala con permisos `0644` para que `apt` pueda verificar su firma, aunque el resto del despliegue mantenga `umask 077` para proteger secretos.
 
 ## Aislamiento, estado y seguridad
 
@@ -88,4 +90,4 @@ Terraform se instalará desde el repositorio oficial firmado si no está disponi
 
 Los cuatro puertos del VPS se enlazan inicialmente a `127.0.0.1`, evitando exponer una API sin autenticación. Para dar acceso remoto a Swagger hay que configurar un proxy seguro o acceso restringido por firewall. No se modifican los puertos ni los contenedores de otras aplicaciones alojadas en el servidor.
 
-**Estado del despliegue:** los recursos, scripts y workflows se preparan en el repositorio, pero todavía se requiere conectar GitHub al VPS y ejecutar el primer despliegue real. No se debe afirmar que los cuatro ambientes están instalados hasta verificar sus resultados.
+**Registro:** el intento manual `#44855855301` alcanzó el VPS y falló al instalar Terraform porque `apt` no podía leer el keyring de HashiCorp. El arreglo y el despliegue automático solo se considerarán verificados después de una nueva ejecución exitosa. No se asume que PostgreSQL o la API estén instalados hasta comprobarlo.
