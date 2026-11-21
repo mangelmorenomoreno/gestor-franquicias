@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: gestor-franquicias-despliegue-${{ inputs.ambiente }}
@@ -109,23 +110,22 @@ jobs:
             "$RUNNER_TEMP/gestor-franquicias-entrega.tar.gz" \
             "$remoto:.gestor-franquicias-bootstrap/$AMBIENTE/entrega.tar.gz"
 
-      - name: Autenticar en GHCR si la imagen es privada
+      - name: Autenticar exclusivamente el despliegue en GHCR
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          GHCR_USUARIO: ${{ secrets.GHCR_USUARIO }}
-          GHCR_LEER_PAQUETE: ${{ secrets.GHCR_LEER_PAQUETE }}
+          GHCR_USUARIO: ${{ secrets.GHCR_USUARIO || github.repository_owner }}
+          GHCR_LEER_PAQUETE: ${{ secrets.GHCR_LEER_PAQUETE || github.token }}
         run: |
           set -euo pipefail
-          if [[ -z "$GHCR_LEER_PAQUETE" ]]; then
-            echo "Se utilizará acceso público a GHCR."
-            exit 0
-          fi
+          # GITHUB_TOKEN permite leer el paquete sin exigir un PAT adicional.
+          # DOCKER_CONFIG aislado evita alterar las sesiones GHCR de otras aplicaciones.
           [[ "$GHCR_USUARIO" =~ ^[A-Za-z0-9-]+$ ]]
+          test -n "$GHCR_LEER_PAQUETE"
           printf '%s' "$GHCR_LEER_PAQUETE" |
             ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
               -i "$HOME/.ssh/id_ed25519" "$VPS_USER@$VPS_HOST" \
-              "if [ \$(id -u) -eq 0 ]; then docker login ghcr.io -u '$GHCR_USUARIO' --password-stdin; else sudo -n docker login ghcr.io -u '$GHCR_USUARIO' --password-stdin; fi"
+              "sudo -n install -d -m 700 /run/gestor-franquicias-ghcr && sudo -n env DOCKER_CONFIG=/run/gestor-franquicias-ghcr docker login ghcr.io -u '$GHCR_USUARIO' --password-stdin"
 
       - name: Aprovisionar PostgreSQL y levantar la API del ambiente
         env:
@@ -170,3 +170,15 @@ jobs:
               sudo -n bash "$destino/scripts/desplegar-vps.sh" "$ambiente"
           fi
           DESPLIEGUE_REMOTO
+
+      - name: Eliminar autenticación GHCR temporal
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          # Limpiar credenciales efímeras incluso cuando falle Terraform o la API.
+          ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -i "$HOME/.ssh/id_ed25519" "$VPS_USER@$VPS_HOST" \
+            "sudo -n rm -f /run/gestor-franquicias-ghcr/config.json && sudo -n rmdir /run/gestor-franquicias-ghcr" || true

@@ -21,6 +21,8 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 cd "$directorio"
+# Credenciales de GHCR efímeras, aisladas de las apps del VPS que usan Docker.
+export DOCKER_CONFIG=/run/gestor-franquicias-ghcr
 test -f .env
 test -f "$compose"
 test -f infra/terraform/main.tf
