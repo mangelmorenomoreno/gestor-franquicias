@@ -10,6 +10,7 @@ import com.moreno.gestorfranquicias.modules.productos.dataproviders.IProductoDat
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 @Service
 public class ProductoService implements IProductoService {
@@ -29,6 +30,10 @@ public class ProductoService implements IProductoService {
                 .switchIfEmpty(Mono.error(ExcepcionNegocio.noEncontrado("La sucursal")))
                 .then(productos.guardar(new ProductoEntity(null, idSucursal, datos.nombre().trim(), datos.stock(), null)))
                 .map(mapper::convertir);
+    }
+
+    public Flux<ProductoResponse> listar() {
+        return productos.listar().map(mapper::convertir);
     }
 
     public Mono<ProductoResponse> consultar(Long idSucursal, Long idProducto) {
