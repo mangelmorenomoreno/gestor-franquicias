@@ -48,7 +48,7 @@ Content-Type: application/json
 ```
 
 El controlador recibe el nombre, el servicio elimina espacios al inicio y al final y el proveedor de datos guarda el registro. Si la creación es correcta, la API responde con **201 Created** y devuelve el identificador y el nombre de la franquicia.
- 
+
 **Respuesta de ejemplo — `201 Created`**
 
 ```json
