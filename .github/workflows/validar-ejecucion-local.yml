@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feature/orden-codigo-y-guia-local
   workflow_dispatch:
 
 permissions:
@@ -25,12 +24,42 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Configurar base de datos local
+      - name: Comprobar configuración sin archivo .env
         run: |
           set -euo pipefail
-          cp .env.example .env
-          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=clave_pruebas_ci_2026/' .env
-          docker compose config -q
+          test ! -e .env
+          env -u DB_USERNAME -u DB_PASSWORD docker compose config --format json \
+            | python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; assert s["api"]["environment"]["DB_USERNAME"] == "gestor_franquicias"; assert s["api"]["environment"]["DB_PASSWORD"] == "franquicias_demo_local_2026"; assert s["base-datos"]["environment"]["POSTGRES_PASSWORD"] == "franquicias_demo_local_2026"'
+          bash -n scripts/iniciar-local-maven.sh
+
+      - name: Validar ejemplos y script de Windows
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errores = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path "scripts/iniciar-local-maven.ps1").Path,
+              [ref]$tokens,
+              [ref]$errores) | Out-Null
+          if ($errores.Count -gt 0) {
+              $errores | ForEach-Object { Write-Error $_ }
+              exit 1
+          }
+
+      - name: Verificar contratos de ejemplo
+        run: |
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          documento = Path("docs/EJEMPLOS_API.md").read_text(encoding="utf-8")
+          ejemplos = re.findall(r"```json\n(.*?)\n```", documento, re.DOTALL)
+          assert len(ejemplos) == 17, f"Se esperaban 17 respuestas JSON de ejemplo, hay {len(ejemplos)}"
+          for ejemplo in ejemplos:
+              datos = json.loads(ejemplo)
+              assert {"code", "message", "success", "data", "errors", "timestamp"} <= datos.keys()
+          PY
 
       - name: Opción 1 - Docker Compose completo
         run: |
@@ -66,13 +95,8 @@ jobs:
           docker compose stop api
           docker compose up -d base-datos
 
-          set -a
-          source .env
-          set +a
-          export DB_URL="r2dbc:postgresql://127.0.0.1:5434/gestor_franquicias"
-          export DB_MIGRATION_URL="jdbc:postgresql://127.0.0.1:5434/gestor_franquicias"
-
-          mvn -B -ntp spring-boot:run > /tmp/gestor-franquicias-local.log 2>&1 &
+          test ! -e .env
+          bash scripts/iniciar-local-maven.sh > /tmp/gestor-franquicias-local.log 2>&1 &
           proceso_maven=$!
           trap 'kill "$proceso_maven" 2>/dev/null || true' EXIT
 
