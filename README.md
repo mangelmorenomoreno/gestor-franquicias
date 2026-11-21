@@ -594,3 +594,7 @@ Utilizaré pruebas unitarias para la lógica de negocio y pruebas de integració
 
 Actualizaré esta documentación con los resultados reales de las validaciones y del despliegue.
 
+
+### Despliegue en producción por PR
+
+Al fusionar un PR en `main`, GitHub Actions ejecuta el CI, publica la imagen del SHA verificado en GHCR y despliega automáticamente el perfil `prod` en el VPS **solo después de que las etapas anteriores hayan finalizado correctamente**. No se despliega al abrir el PR, ni se instalan `dev`, `test` o `stage` en el VPS. Consulte [la guía de despliegue](docs/DESPLIEGUE.md). El acceso al backend permanece vinculado a `127.0.0.1:8088` hasta configurar un canal seguro de acceso externo.
