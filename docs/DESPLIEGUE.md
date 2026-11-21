@@ -80,7 +80,7 @@ curl -fsS http://127.0.0.1:8088/actuator/health
 docker ps --filter name=gestor-franquicias-prod
 ~~~
 
-El archivo de claves públicas de HashiCorp se instala con permisos `0644` para que `apt` pueda verificar su firma, aunque el resto del despliegue mantenga `umask 077` para proteger secretos.
+El archivo de claves públicas de HashiCorp se instala con permisos `0644` para que `apt` pueda verificar su firma, aunque el resto del despliegue mantenga `umask 077` para proteger secretos. Si una instalación anterior dejó ese archivo con permisos restrictivos, se reparan también antes del primer `apt-get update` del siguiente intento.
 
 ## Aislamiento, estado y seguridad
 
