@@ -1,66 +1,88 @@
-# Despliegue en el VPS
+# Despliegue automatizado en el VPS
 
-El entorno de producción de esta API tiene su propio directorio, red Docker, volumen PostgreSQL y contenedor. No requiere dominio y se puede consultar desde la IP pública y un puerto dedicado.
+La aplicación dispone de un workflow manual de GitHub Actions que automatiza la preparación del servidor y la puesta en marcha de la API. Una vez activado desde la rama `main`, la ejecución transfiere los archivos, instala Terraform si hace falta, inicializa y aplica la infraestructura exclusiva de este proyecto, descarga la imagen versionada desde GHCR, inicia el contenedor y comprueba el endpoint de salud.
 
-## Preparar el VPS
+El despliegue **no se ha ejecutado todavía** en el VPS. La automatización solo se utilizará cuando el propietario haya configurado el acceso SSH y los secretos correspondientes.
 
-1. Confirmar que Docker, Docker Compose y Terraform están disponibles.
-2. Crear el directorio `/opt/gestor-franquicias` y colocar allí `docker-compose.prod.yml` y el archivo `.env` con permisos restringidos.
-3. Configurar la contraseña de PostgreSQL y las variables del archivo de entorno.
-4. Aprovisionar la base de datos desde `infra/terraform` ejecutando `terraform init`, `terraform plan` y `terraform apply` en el VPS.
-5. Verificar que existe la red `gestor-franquicias-red` y que PostgreSQL está disponible solo dentro de esa red Docker.
-6. Comprobar que la imagen publicada en GHCR es accesible desde el servidor.
-7. Validar `docker compose --env-file .env -f docker-compose.prod.yml config`.
+## Requisitos del servidor
 
-Configuración del archivo `.env` (ejemplo, no utilizar esta contraseña):
+- Ubuntu 26.04.1 LTS en arquitectura amd64.
+- Docker Engine y Docker Compose instalados y funcionales.
+- Acceso saliente a `apt.releases.hashicorp.com`, `registry.terraform.io`, Docker Hub y `ghcr.io`.
+- Acceso SSH de un usuario con permisos de `root` o `sudo -n` para instalar Terraform y administrar los recursos Docker.
+- Puerto local 8088 disponible.
 
-~~~dotenv
-IMAGEN_BACKEND=ghcr.io/mangelmorenomoreno/gestor-franquicias:latest
-PUERTO_API=8088
-IP_ESCUCHA_API=127.0.0.1
-DB_USERNAME=gestor_franquicias
-DB_PASSWORD=CAMBIAR_POR_UNA_CLAVE_PRIVADA
-~~~
+Terraform se instala automáticamente desde el repositorio oficial de HashiCorp únicamente cuando no está instalado, verificando la huella del certificado de firma del repositorio. No se modifican contenedores, redes, volúmenes o directorios ajenos a Gestor de Franquicias.
 
-En el VPS se debe comprobar que el puerto elegido no esté ocupado y que el firewall permita únicamente los accesos necesarios. PostgreSQL no tiene puertos publicados hacia Internet.
+## Configuración inicial en GitHub
 
-## Publicar la imagen
+Abrir `Settings → Environments` y crear el entorno `produccion`. Configurar las siguientes entradas como **secrets** del entorno:
 
-Después de que un commit llegue a `main` y supere la validación, el workflow `Publicar imagen Docker` compila y publica la imagen en GHCR con la etiqueta del commit y la etiqueta `latest`. La publicación debe verificarse antes de intentar desplegar.
+| Secreto | Contenido |
+|---|---|
+| `VPS_HOST` | IP o nombre DNS del VPS |
+| `VPS_USER` | Usuario para la conexión SSH |
+| `VPS_SSH_KEY` | Clave privada SSH con autorización en el VPS |
+| `VPS_KNOWN_HOSTS` | Clave pública del host SSH verificada previamente |
+| `DB_PASSWORD` | Contraseña aleatoria de PostgreSQL, mínimo 20 caracteres; letras, números, guion o guion bajo |
 
-Si la imagen queda privada, se requiere iniciar sesión en GHCR en el VPS o configurar el paquete como público.
-
-## Configurar GitHub Actions para el despliegue
-
-Crear el entorno `produccion` en GitHub y configurar estos secretos para ese entorno:
-
-- `VPS_HOST`: dirección del servidor.
-- `VPS_USER`: usuario SSH con los permisos indispensables.
-- `VPS_SSH_KEY`: clave privada SSH del usuario de despliegue.
-- `VPS_KNOWN_HOSTS`: entrada de llave pública del host SSH verificada previamente por un canal confiable.
-
-Las credenciales reales nunca deben escribirse en el repositorio ni compartirse en un mensaje de chat. La clave de host debe verificarse antes de guardarla; no deshabilitar `StrictHostKeyChecking`.
-
-Una vez configurados, ejecutar manualmente el workflow `Desplegar API en el VPS` desde la rama `main`. Esta tarea actualiza solo el servicio `api` dentro del proyecto de Compose que se encuentra en `/opt/gestor-franquicias`.
-
-La opción `IP_ESCUCHA_API=127.0.0.1` mantiene la API accesible solo desde el servidor por defecto. Recomiendo identificar la imagen por la etiqueta inmutable del commit en lugar de `latest` para mantener la trazabilidad de la entrega.
-
-El despliegue está pensado como operación independiente del proceso de publicación. No se ejecutará automáticamente en el VPS hasta que esté preparada y validada su infraestructura.
-
-## Verificar el resultado
+Para generar una contraseña segura en una terminal local:
 
 ~~~bash
-docker compose --env-file .env -f docker-compose.prod.yml ps
-docker compose --env-file .env -f docker-compose.prod.yml logs --tail=100 api
-curl -fsS http://127.0.0.1:8088/actuator/health
+openssl rand -hex 32
 ~~~
 
-Desde otro equipo, si el puerto está habilitado, la documentación se encuentra en `http://IP_PUBLICA:8088/swagger-ui.html`. El acceso por IP y HTTP no está cifrado. Como esta prueba no exige autenticación, los endpoints de escritura deben quedar restringidos mediante firewall a direcciones autorizadas. Para publicar por IP, usar `IP_ESCUCHA_API=0.0.0.0` solamente después de configurar esa restricción; para un acceso más prolongado es preferible HTTPS.
+No pegar la contraseña ni la clave privada SSH en el repositorio, en un issue ni en un chat. `VPS_KNOWN_HOSTS` debe comprobarse contra la huella auténtica del servidor antes de introducirla en GitHub.
 
-## Retirar la prueba
+Si la imagen de GHCR es privada, configurar además `GHCR_USUARIO` y `GHCR_LEER_PAQUETE` (token con permiso `read:packages`). El workflow utiliza estas credenciales únicamente cuando están disponibles. Si la imagen es pública, no hacen falta.
 
-Después de finalizar la evaluación, comprobar que no se requiere conservar la información y preparar una copia de seguridad cuando aplique. Detener únicamente los contenedores del proyecto y, si corresponde, ejecutar `terraform destroy` desde su carpeta de infraestructura.
+Se recomienda activar la aprobación del entorno `produccion` si el plan de GitHub y la configuración del repositorio lo permiten.
 
-No se debe usar `docker system prune --volumes` ni eliminar redes o volúmenes de otras aplicaciones.
+## Primera ejecución
 
-**Estado actual:** el despliegue real y la configuración de secretos están pendientes de comprobarse.
+1. Confirmar que el workflow `Validación backend` terminó correctamente en `main`.
+2. Confirmar que el workflow `Publicar imagen Docker` publicó la etiqueta correspondiente al último SHA de `main`.
+3. Abrir `Actions → Desplegar API en el VPS → Run workflow`, con la rama `main`.
+4. Aprobar la ejecución cuando el entorno lo solicite y revisar el resultado final.
+
+La instalación inicial ya no requiere escribir los comandos `apt`, `terraform init`, `terraform plan` o `terraform apply` manualmente en la consola del VPS. El workflow los ejecuta en orden bajo la autorización del usuario.
+
+## Recursos que administra Terraform
+
+- Red Docker: `gestor-franquicias-red`.
+- Volumen de PostgreSQL: `gestor-franquicias-datos`.
+- Contenedor PostgreSQL: `gestor-franquicias-postgres`.
+- Imagen de PostgreSQL 16.
+
+Docker Compose administra únicamente el servicio `api` de este proyecto; el puerto está vinculado a `127.0.0.1:8088` por seguridad y el contenedor de PostgreSQL no publica un puerto al exterior.
+
+La configuración y el estado de Terraform se conservan en `/opt/gestor-franquicias`. El estado puede incluir valores sensibles y debe tener permisos restringidos. No se debe eliminar `terraform.tfstate` ni ejecutar `terraform destroy` sin revisar las consecuencias.
+
+El workflow verifica que los cambios afecten solo a los recursos Terraform definidos para esta aplicación y rechaza cualquier plan que elimine el volumen persistente.
+
+## Verificar despliegue
+
+El workflow valida la salud de la API después del despliegue. Para verificarla de manera adicional desde el propio VPS:
+
+~~~bash
+curl -fsS http://127.0.0.1:8088/actuator/health
+docker ps --filter name=gestor-franquicias
+cd /opt/gestor-franquicias
+docker compose -p gestor-franquicias --env-file .env -f docker-compose.prod.yml ps
+~~~
+
+Swagger UI estará disponible dentro del servidor en `http://127.0.0.1:8088/swagger-ui.html`, mientras el puerto siga ligado a localhost.
+
+La API **no se expone a Internet automáticamente** porque el enunciado no requiere autenticación. Para que un evaluador remoto acceda a Swagger, se debe configurar primero un proxy HTTPS o una regla de firewall que limite las direcciones autorizadas. Los puertos 80 y 443 pueden estar en uso por otros servicios; no se modifican aquí.
+
+## Limitaciones y medidas de seguridad
+
+- La conexión SSH y los secretos deben configurarse una sola vez. Sin estos accesos la automatización no puede modificar el VPS.
+- Una contraseña `DB_PASSWORD` ya utilizada debe conservarse entre despliegues; cambiarla en el archivo de entorno no cambia automáticamente la contraseña interna de PostgreSQL.
+- No se permite eliminar el volumen de PostgreSQL mediante este flujo. Hacer copias de seguridad antes de actualizar sistemas con datos relevantes.
+- La publicación en GHCR y el despliegue en el VPS son acciones separadas; publicar una imagen no significa que la API ya esté desplegada.
+- El estado Terraform está almacenado localmente en el VPS, no en GitHub Actions. Es necesario conservarlo y respaldarlo.
+
+## Retirar la instalación
+
+La eliminación de recursos requiere una intervención explícita y una comprobación del estado de PostgreSQL. No existe un workflow de eliminación automática. Nunca ejecutar comandos generales como `docker system prune --volumes` en este servidor compartido.
