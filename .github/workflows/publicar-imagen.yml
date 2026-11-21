@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["Validación backend"]
     types: [completed]
-    branches: [main]
+    branches: [dev, test, stage, main]
 
 permissions:
   contents: read
@@ -12,10 +12,11 @@ permissions:
 
 jobs:
   publicar:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - name: Obtener código validado de main
+      - name: Obtener código verificado por CI
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -27,30 +28,43 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Preparar el JAR de la versión aprobada
+      - name: Construir el JAR de la versión verificada
         run: |
           mvn -B --no-transfer-progress -DskipTests package
           mkdir -p empaquetado
           cp target/gestor-franquicias-0.0.1-SNAPSHOT.jar empaquetado/gestor-franquicias.jar
 
-      - name: Preparar constructor Docker
+      - name: Preparar etiquetas inmutables por commit
+        id: etiquetas
+        env:
+          RAMA: ${{ github.event.workflow_run.head_branch }}
+          SHA_VALIDADO: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "version=ghcr.io/$REPO:$SHA_VALIDADO" >> "$GITHUB_OUTPUT"
+          if [[ "$RAMA" == main ]]; then
+            echo "latest=ghcr.io/$REPO:latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Preparar Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Autenticar en GitHub Container Registry
+      - name: Autenticar GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publicar imagen de producción
+      - name: Publicar imagen de la rama validada
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.runtime
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.event.workflow_run.head_sha }}
+            ${{ steps.etiquetas.outputs.version }}
+            ${{ steps.etiquetas.outputs.latest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

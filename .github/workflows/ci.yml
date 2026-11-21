@@ -39,8 +39,12 @@ jobs:
       - name: Construir imagen Docker sin descargar dependencias nuevamente
         run: docker build -f Dockerfile.runtime -t gestor-franquicias:validacion .
 
-      - name: Validar arranque real de la imagen y persistencia
-        run: bash scripts/validar-contenedor.sh
+      - name: Validar conexiones PostgreSQL y Flyway con cada perfil
+        run: |
+          for ambiente in dev test stage prod; do
+            echo "=== Comprobando perfil $ambiente con su propia base ==="
+            PERFIL="$ambiente" bash scripts/validar-contenedor.sh
+          done
 
       - name: Comprobar sintaxis del despliegue automatizado
         run: |
