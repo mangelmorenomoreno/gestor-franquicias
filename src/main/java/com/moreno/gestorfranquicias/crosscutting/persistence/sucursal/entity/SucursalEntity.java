@@ -8,4 +8,6 @@ import org.springframework.data.relational.core.mapping.Table;
 public record SucursalEntity(
         @Id @Column("id_sucursal") Long idSucursal,
         @Column("id_franquicia") Long idFranquicia,
-        String nombre) {}
+        String nombre) {
+
+}
