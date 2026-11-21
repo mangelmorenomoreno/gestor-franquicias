@@ -4,14 +4,16 @@ La API Gestor de Franquicias dispone de cuatro ambientes aislados para probar ca
 
 ## Ambientes, conexiones y perfiles
 
-| Ambiente | Rama | Entorno GitHub | Perfil Spring | Puerto configurado | Directorio previsto en VPS |
-|---|---|---|---|---|---|
-| Desarrollo | `dev` | `desarrollo` | `dev` | 8086 | `/opt/gestor-franquicias/dev` |
-| Pruebas | `test` | `pruebas` | `test` | 8087 | `/opt/gestor-franquicias/test` |
-| Preproducción | `stage` | `preproduccion` | `stage` | 8089 | `/opt/gestor-franquicias/stage` |
-| Producción | `main` | `produccion` | `prod` | 8088 | `/opt/gestor-franquicias/prod` |
+**Importante: los puertos de esta tabla son valores definidos en los archivos de configuración, NO servicios que estén ejecutándose en el VPS.** La única instancia desplegada en el servidor es producción (`main` / perfil `prod`, puerto público `8088`). Los demás perfiles se validan en CI usando contenedores temporales y no están publicados ni disponibles en los puertos `8086`, `8087` o `8089` del VPS por este proceso.
 
-**En el VPS únicamente se despliega `prod`.** Los perfiles de `dev`, `test` y `stage` siguen probándose en CI y no se instalan en el servidor en este flujo.
+| Ambiente | Rama | Perfil Spring | Puerto reservado en configuración | Estado del despliegue en el VPS |
+|---|---|---|---|---|
+| Desarrollo | `dev` | `dev` | `8086` | **No desplegado**. Solo validación temporal en GitHub Actions |
+| Pruebas | `test` | `test` | `8087` | **No desplegado**. Solo validación temporal en GitHub Actions |
+| Preproducción | `stage` | `stage` | `8089` | **No desplegado**. Solo validación temporal en GitHub Actions |
+| Producción | `main` | `prod` | `8088` | **Desplegado y verificado**: `http://2.25.123.13:8088` |
+
+El directorio efectivo del despliegue de producción es `/opt/gestor-franquicias/prod`. Los directorios `/opt/gestor-franquicias/dev`, `/opt/gestor-franquicias/test` y `/opt/gestor-franquicias/stage` son rutas previstas por los scripts para una eventual instalación manual, **no evidencia de que existan instancias desplegadas**. Las configuraciones de los cuatro ambientes se mantienen para reproducibilidad y pruebas, pero no se levantan simultáneamente en el VPS.
 
 Cada perfil está preparado para conservar su propio estado Terraform, red Docker, contenedor PostgreSQL 16, volumen persistente y contenedor Spring Boot; en el VPS de esta entrega únicamente se instala producción. Todos pueden llamar a su base `gestor_franquicias` porque son instancias independientes; la dirección `base-datos` se resuelve únicamente dentro de la red correspondiente.
 
@@ -34,7 +36,7 @@ La primera vez que se habilite esta configuración, puede que una rama todavía 
 
 La secuencia automática es **merge a main → validación backend exitosa → publicación GHCR exitosa → despliegue prod → healthcheck**. El job `desplegar_produccion` se ejecuta tras `publicar`, solo si la validación original corresponde a la rama `main`. Se pasa al despliegue el SHA exacto de esa validación para evitar usar un commit distinto. Ni un PR abierto ni una publicación manual desencadenan automáticamente el despliegue.
 
-Siguen existiendo workflows manuales, pero en este servidor únicamente debe ejecutarse producción. Los workflows disponibles son:
+Existen workflows manuales preparados para cada perfil, pero **no forman parte del despliegue realizado**: los ambientes `dev`, `test` y `stage` no se han instalado en el VPS para esta entrega. El único despliegue ejecutado y verificado es `prod` desde `main`. Los workflows disponibles en el repositorio son:
 
 - `Desplegar dev en el VPS` desde la rama `dev`.
 - `Desplegar test en el VPS` desde la rama `test`.
@@ -84,7 +86,7 @@ El archivo de claves públicas de HashiCorp se instala con permisos `0644` para 
 
 ## Aislamiento, estado y seguridad
 
-El despliegue crea los archivos en `/opt/gestor-franquicias/<ambiente>` y guarda el estado Terraform por separado. El plan impide eliminar volúmenes PostgreSQL y rechaza cambios a direcciones de recursos que no pertenezcan a la configuración. No se ejecuta `terraform destroy` automáticamente.
+El despliegue realizado creó los recursos de producción en `/opt/gestor-franquicias/prod`; los scripts soportan rutas por perfil para posibles despliegues futuros. No se afirma que los demás perfiles estén instalados en el VPS. Para producción, Terraform guarda su estado por separado. El plan impide eliminar volúmenes PostgreSQL y rechaza cambios a direcciones de recursos que no pertenezcan a la configuración. No se ejecuta `terraform destroy` automáticamente.
 
 Terraform se instalará desde el repositorio oficial firmado si no está disponible. Si la base ya tiene información, la automatización rechaza modificar la contraseña PostgreSQL por accidente. Los archivos `.env` y `terraform.tfstate` son privados; hacer copia de seguridad del estado y de los datos antes de operaciones críticas.
 
