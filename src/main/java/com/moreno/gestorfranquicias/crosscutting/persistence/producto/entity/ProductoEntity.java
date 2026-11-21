@@ -7,8 +7,8 @@ import org.springframework.data.relational.core.mapping.Table;
 
 @Table("productos")
 public record ProductoEntity(
-    @Id @Column("id_producto") Long idProducto,
-    @Column("id_sucursal") Long idSucursal,
-    String nombre,
-    Integer stock,
-    @Version Long version) {}
+        @Id @Column("id_producto") Long idProducto,
+        @Column("id_sucursal") Long idSucursal,
+        String nombre,
+        Integer stock,
+        @Version Long version) {}

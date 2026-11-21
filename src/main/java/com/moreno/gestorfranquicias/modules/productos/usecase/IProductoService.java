@@ -2,22 +2,23 @@ package com.moreno.gestorfranquicias.modules.productos.usecase;
 
 import com.moreno.gestorfranquicias.crosscutting.domain.request.*;
 import com.moreno.gestorfranquicias.crosscutting.domain.response.*;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 public interface IProductoService {
 
-  Mono<ProductoResponse> crear(Long idSucursal, CrearProductoRequest datos);
+    Mono<ProductoResponse> crear(Long idSucursal, CrearProductoRequest datos);
 
-  Mono<ProductoResponse> consultar(Long idSucursal, Long idProducto);
+    Mono<ProductoResponse> consultar(Long idSucursal, Long idProducto);
 
-  Flux<ProductoResponse> listar();
+    Flux<ProductoResponse> listar();
 
-  Mono<ProductoResponse> cambiarStock(
-      Long idSucursal, Long idProducto, ActualizarStockRequest datos);
+    Mono<ProductoResponse> cambiarStock(
+            Long idSucursal, Long idProducto, ActualizarStockRequest datos);
 
-  Mono<ProductoResponse> cambiarNombre(
-      Long idSucursal, Long idProducto, ActualizarNombreRequest datos);
+    Mono<ProductoResponse> cambiarNombre(
+            Long idSucursal, Long idProducto, ActualizarNombreRequest datos);
 
-  Mono<Void> eliminar(Long idSucursal, Long idProducto);
+    Mono<Void> eliminar(Long idSucursal, Long idProducto);
 }
