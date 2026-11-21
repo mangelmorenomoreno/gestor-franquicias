@@ -3,8 +3,8 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: gestor_franquicias
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME:-gestor_franquicias}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-franquicias_demo_local_2026}
     ports:
       - "127.0.0.1:5434:5432"
     volumes:
@@ -19,8 +19,8 @@ services:
     environment:
       DB_URL: r2dbc:postgresql://base-datos:5432/gestor_franquicias
       DB_MIGRATION_URL: jdbc:postgresql://base-datos:5432/gestor_franquicias
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME:-gestor_franquicias}
+      DB_PASSWORD: ${DB_PASSWORD:-franquicias_demo_local_2026}
     ports:
       - "127.0.0.1:8088:8080"
     depends_on:
