@@ -11,7 +11,7 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "${IP_ESCUCHA_API:-127.0.0.1}:${PUERTO_API:-8088}:8080"
+      - "${IP_ESCUCHA_API:-0.0.0.0}:${PUERTO_API:-8088}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: "prod"
       DB_URL: r2dbc:postgresql://base-datos:5432/gestor_franquicias

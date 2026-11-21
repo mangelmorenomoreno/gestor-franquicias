@@ -70,7 +70,7 @@ No subir contraseñas, llaves SSH privadas ni archivos `.env` a Git ni compartir
 1. En GitHub Environments, configurar `produccion` con acceso desde `main` y sus secretos SSH/PostgreSQL.
 2. Crear un PR a `main`, revisarlo y fusionarlo. El push del merge activa el CI. Ante un error, no se publicará ni desplegará.
 3. El workflow `Publicar imagen Docker` publica el SHA validado en GHCR y, si corresponde a `main`, llama al despliegue de producción.
-4. Terraform inicializa la red, volumen y PostgreSQL exclusivos de `prod`; la API se inicia en el puerto privado `127.0.0.1:8088`.
+4. Terraform inicializa la red, volumen y PostgreSQL exclusivos de `prod`; la API se enlaza a `0.0.0.0:8088`, para aceptar conexiones desde la IP pública del VPS.
 5. El despliegue verifica `/actuator/health`, conexión R2DBC y migraciones Flyway.
 
 Para relanzar manualmente sin nuevo commit: `Actions → Desplegar prod en el VPS → Run workflow` (rama `main`). Desde el VPS:
@@ -88,6 +88,10 @@ El despliegue crea los archivos en `/opt/gestor-franquicias/<ambiente>` y guarda
 
 Terraform se instalará desde el repositorio oficial firmado si no está disponible. Si la base ya tiene información, la automatización rechaza modificar la contraseña PostgreSQL por accidente. Los archivos `.env` y `terraform.tfstate` son privados; hacer copia de seguridad del estado y de los datos antes de operaciones críticas.
 
-Los cuatro puertos del VPS se enlazan inicialmente a `127.0.0.1`, evitando exponer una API sin autenticación. Para dar acceso remoto a Swagger hay que configurar un proxy seguro o acceso restringido por firewall. No se modifican los puertos ni los contenedores de otras aplicaciones alojadas en el servidor.
+Los perfiles `dev`, `test` y `stage` mantienen `127.0.0.1`. Solo `prod` publica TCP `8088` en todas las interfaces (`0.0.0.0`) y abre ese puerto en UFW cuando está activo. En un proveedor con firewall externo, permitir adicionalmente TCP `8088` de entrada. PostgreSQL continúa exclusivamente en la red Docker privada; no se publican puertos de la base de datos ni se modifican contenedores de otras aplicaciones.
+
+**Acceso público:** `http://IP_PUBLICA_DEL_VPS:8088/swagger-ui.html`, especificación en `http://IP_PUBLICA_DEL_VPS:8088/v3/api-docs` y comprobación `http://IP_PUBLICA_DEL_VPS:8088/actuator/health`. La IP que muestra Docker (`0.0.0.0`) indica escucha en todas las interfaces, no es una dirección para el navegador. Verificar desde una red externa, porque el chequeo local del VPS no demuestra conectividad externa.
+
+**Advertencia:** esta prueba técnica no incorpora autenticación en los endpoints de escritura, por lo que abrir `8088` permite que cualquiera en Internet consulte, cree, modifique o elimine datos expuestos por la API. No almacenar datos reales/sensibles. Para un uso prolongado se recomienda HTTPS con proxy inverso, autenticación y limitación de peticiones. HTTP directo por IP se habilita únicamente a petición para la evaluación.
 
 **Registro:** el intento manual `#44855855301` alcanzó el VPS y falló al instalar Terraform porque `apt` no podía leer el keyring de HashiCorp. El arreglo y el despliegue automático solo se considerarán verificados después de una nueva ejecución exitosa. No se asume que PostgreSQL o la API estén instalados hasta comprobarlo.

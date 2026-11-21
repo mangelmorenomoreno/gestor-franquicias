@@ -90,7 +90,11 @@ jobs:
             printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
             printf 'IMAGEN_BACKEND=ghcr.io/mangelmorenomoreno/gestor-franquicias:%s\n' "$SHA_DESPLIEGUE"
             printf 'PUERTO_API=%s\n' "$PUERTO"
-            printf 'IP_ESCUCHA_API=127.0.0.1\n'
+            if [[ "$AMBIENTE" == prod ]]; then
+              printf 'IP_ESCUCHA_API=0.0.0.0\n'
+            else
+              printf 'IP_ESCUCHA_API=127.0.0.1\n'
+            fi
           } > "$RUNNER_TEMP/entrega/.env"
           tar -czf "$RUNNER_TEMP/gestor-franquicias-entrega.tar.gz" -C "$RUNNER_TEMP/entrega" .
 

@@ -11,6 +11,12 @@ case "$ambiente" in
   *) echo "Ambiente no autorizado: $ambiente" >&2; exit 1 ;;
 esac
 
+# Solo producción expone la API al público; los otros perfiles siguen privados.
+ip_escucha_esperada=127.0.0.1
+if [[ "$ambiente" == prod ]]; then
+  ip_escucha_esperada=0.0.0.0
+fi
+
 directorio="/opt/gestor-franquicias/$ambiente"
 compose="docker-compose.$ambiente.yml"
 postgres="gestor-franquicias-$ambiente-postgres"
@@ -34,7 +40,7 @@ set +a
 if [[ ! "${DB_USERNAME:-}" =~ ^[a-z_][a-z0-9_]*$ ]] ||
    [[ ! "${DB_PASSWORD:-}" =~ ^[A-Za-z0-9_-]{20,}$ ]] ||
    [[ ! "${IMAGEN_BACKEND:-}" =~ ^ghcr[.]io/mangelmorenomoreno/gestor-franquicias:[0-9a-f]{40}$ ]] ||
-   [[ "${IP_ESCUCHA_API:-}" != "127.0.0.1" ]] ||
+   [[ "${IP_ESCUCHA_API:-}" != "$ip_escucha_esperada" ]] ||
    [[ "${PUERTO_API:-}" != "$puerto_esperado" ]]; then
   echo "Configuración o puerto no válidos para $ambiente." >&2
   exit 1
@@ -165,5 +171,12 @@ if [[ "$redes_api" != "$red" ]]; then
   echo "La API está conectada a una red inesperada: $redes_api" >&2
   exit 1
 fi
-echo "Ambiente $ambiente validado en 127.0.0.1:$PUERTO_API"
+# Abrir únicamente el puerto de la API de producción cuando UFW esté activo.
+# El firewall del proveedor cloud, si existe, también debe permitir TCP 8088.
+if [[ "$ambiente" == prod ]] && command -v ufw >/dev/null 2>&1 && \
+   ufw status | grep -q "^Status: active"; then
+  ufw allow 8088/tcp comment "Gestor Franquicias API" >/dev/null
+fi
+
+echo "Ambiente $ambiente validado en $IP_ESCUCHA_API:$PUERTO_API"
 docker compose -p "gestor-franquicias-$ambiente" --env-file .env -f "$compose" ps
