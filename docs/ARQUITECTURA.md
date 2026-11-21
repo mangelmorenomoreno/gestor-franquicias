@@ -1,84 +1,57 @@
-# Arquitectura de Gestor de Franquicias
+# Arquitectura
 
-Organicé el backend separando la recepción de solicitudes, las reglas del negocio y las consultas a la base de datos. Cada módulo mantiene sus propias interfaces y casos de uso, mientras que los contratos y componentes compartidos se encuentran en paquetes transversales.
+El backend está organizado por funcionalidad: franquicias, sucursales y productos. Los controladores gestionan las solicitudes HTTP, los servicios aplican las reglas de negocio y los proveedores de datos implementan las consultas a PostgreSQL.
 
-## Flujo de una solicitud
-
-~~~text
+```text
 HTTP / JSON
-   |
-   v
-modules/*/api (Controller)
-   |
-   v
-modules/*/usecase (IService -> Service)
-   |
-   v
-modules/*/dataproviders (IDataProvider -> implementación R2DBC)
-   |
-   v
-crosscutting/persistence (Repository / Entity / Mapper)
-   |
-   v
-PostgreSQL
-~~~
+    |
+Controlador (api)
+    |
+Servicio (usecase)
+    |
+Interfaz de proveedor de datos
+    |
+Implementación R2DBC
+    |
+Repositorio / PostgreSQL
+```
 
-Los controladores reciben la solicitud HTTP, validan la entrada y construyen la respuesta. Los casos de uso contienen las reglas funcionales y dependen de interfaces de proveedores de datos. Las implementaciones R2DBC resuelven las consultas y actualizaciones en PostgreSQL. Los DTO de entrada y salida se mantienen separados de las entidades.
+Los DTO de entrada y salida están separados de las entidades de persistencia. Los mapeadores convierten las entidades en respuestas de la API.
 
-## Decisiones técnicas
+## Programación reactiva
 
-- Utilizo Spring WebFlux y Spring Data R2DBC para mantener reactivo el acceso a PostgreSQL.
-- La respuesta estándar utiliza los campos code, message, success, data, errors y timestamp.
-- Represento las entidades de persistencia mediante records de Java y utilizo un campo de versión en productos para controlar modificaciones concurrentes.
-- La consulta de mayor stock utiliza ROW_NUMBER() en PostgreSQL, con un resultado por sucursal y desempate por identificador.
-- Las validaciones se realizan en los DTO y también mediante restricciones e índices en PostgreSQL.
-- Mantengo una estructura por funcionalidades sin incorporar servicios que no hacen parte de esta prueba.
+Spring WebFlux y R2DBC permiten mantener las operaciones de base de datos dentro del flujo reactivo. Los servicios utilizan:
 
-## Relaciones
+- **`Mono<T>`** para buscar, guardar o actualizar un solo elemento; `Mono<Void>` para eliminar sin devolver contenido.
+- **`Flux<T>`** para listar franquicias, sucursales, productos y resultados de consultas que pueden contener varios registros.
+- **`flatMap`** cuando la siguiente operación depende del dato obtenido.
+- **`then` / `thenMany`** cuando primero se debe validar una relación y después ejecutar otra consulta.
+- **`collectList`** para construir respuestas que incluyen una colección dentro de un DTO.
 
-Una franquicia puede tener cero o muchas sucursales, y una sucursal puede tener cero o muchos productos. Cuando un registro existe pero no tiene registros asociados, la respuesta devuelve una lista vacía. Las modificaciones de productos validan su pertenencia a la sucursal indicada.
+Flyway utiliza una conexión JDBC para aplicar las migraciones al iniciar la aplicación. Las consultas de negocio se realizan mediante R2DBC.
 
-## Ramas y validaciones
+## Modelo de datos
 
-Normalmente las ramas `feature/*` se crean desde `dev`. La promoción sigue `dev → test → stage → main` mediante pull requests. Las correcciones excepcionales de producción pueden aplicarse a `main`, y después deben propagarse a las demás ramas mediante avances no forzados.
+```text
+Franquicia (1) ---- (N) Sucursal (1) ---- (N) Producto
+```
 
-El workflow de validación está configurado para ejecutarse con pushes a las ramas permanentes o manualmente. Incluí pruebas unitarias y una prueba de integración con PostgreSQL mediante Testcontainers.
+Una sucursal pertenece a una franquicia y un producto pertenece a una sucursal. El stock se guarda en cada producto. Las claves foráneas conservan la integridad de las relaciones.
 
-## Infraestructura
+Los nombres tienen índices de unicidad en el ámbito correspondiente. Los productos utilizan un campo de versión para detectar actualizaciones concurrentes. La consulta de mayor stock usa `ROW_NUMBER()`, particionando por sucursal y ordenando por stock descendente e identificador ascendente; así se obtiene un resultado por sucursal sin realizar consultas independientes.
 
-Docker Compose permite iniciar la API y PostgreSQL localmente. Terraform define recursos propios del proyecto en el VPS: contenedor de PostgreSQL, volumen de datos y red Docker. **Solo el perfil `prod` de `main` fue desplegado en el VPS (`8088`)**. Los perfiles `dev` (`8086`), `test` (`8087`) y `stage` (`8089`) poseen puertos reservados en la configuración, pero se validan en CI y **no son ambientes publicados en el servidor**.
+## Pruebas
 
-El estado de Terraform puede contener información sensible, por lo que debe mantenerse fuera de Git. El despliegue de producción ya se verificó en el VPS: [ejecución #44859340375](https://github.com/mangelmorenomoreno/gestor-franquicias/actions/runs/44859340375), imagen de commit `33001291d0e031838af99171d5882cd793c29d87`.
+Hay pruebas unitarias de los servicios y pruebas de integración con PostgreSQL mediante Testcontainers. Se validan relaciones, inventario, cambios de nombre, consulta de mayor stock y respuestas de error. El proyecto se compila y prueba con:
 
-## Empaquetado y validación
+```bash
+mvn clean verify
+```
 
-Durante la integración continua, Maven compila y ejecuta las pruebas usando su caché de dependencias. El JAR verificado se copia a un directorio temporal `empaquetado/` que está excluido de Git.
+## Ejecución y despliegue
 
-El archivo `Dockerfile.runtime` construye la imagen utilizando ese JAR, sin descargar nuevamente dependencias de Maven. Esto reduce solicitudes innecesarias al repositorio de artefactos y evita que una limitación temporal del servidor de dependencias afecte a una imagen cuyo código ya fue validado.
+El [README principal](../README.md#ejecutar-localmente) incluye la ejecución local con Docker Compose y con Java 21/Maven.
 
-El archivo `Dockerfile` se conserva para construir la aplicación directamente con Docker Compose desde el código fuente en un equipo de desarrollo.
+En el VPS solo se despliega el perfil `prod` desde `main`. Terraform prepara la red, el volumen y PostgreSQL; Docker Compose ejecuta la API. Los perfiles `dev`, `test` y `stage` se validan en CI, pero no están desplegados en el VPS.
 
-
-## Ejecución, dependencias e interoperabilidad
-
-El servicio HTTP usa **Spring WebFlux** y los repositorios acceden a PostgreSQL mediante **R2DBC**, utilizando composición reactiva en los casos de uso. **Flyway** aplica las migraciones utilizando su conexión JDBC, separada del acceso reactivo de negocio. Esto evita depender de JPA/Hibernate para las relaciones del modelo y conserva el control explícito de las consultas y DTO.
-
-La aplicación se puede ejecutar desde el código fuente de dos formas:
-
-- Con `docker compose up -d --build`: el Dockerfile multietapa compila con Maven/Java 21 y ejecuta Java 21 en un contenedor, junto con PostgreSQL 16; API en `localhost:8088`.
-- Con `mvn spring-boot:run` y PostgreSQL levantado por Docker: API en `localhost:8080`; se configuran `DB_URL`, `DB_MIGRATION_URL`, `DB_USERNAME` y `DB_PASSWORD`.
-
-Las instrucciones exactas y los comandos para Windows y Linux/macOS están en [README, sección Ejecución local](../README.md#8-ejecución-local).
-
-## Evidencia automatizada y límites
-
-La ejecución de GitHub Actions [#44859340375](https://github.com/mangelmorenomoreno/gestor-franquicias/actions/runs/44859340375) comprobó la publicación del JAR como imagen GHCR, Terraform, PostgreSQL, arranque del contenedor de producción, correspondencia con SHA de commit y acceso externo a las rutas de salud, OpenAPI, Swagger y lectura de franquicias.
-
-Esto demuestra funcionamiento de esa revisión, **no** que toda operación o caso límite esté probado en producción. Los cambios funcionales deben validarse mediante las suites Maven y pruebas de integración en PostgreSQL/Testcontainers. El flujo evita realizar escrituras destructivas sobre la base pública.
-
-## Alcance y decisiones conscientes
-
-- La estructura por módulos y los contratos de acceso a datos **aplica separación de responsabilidades y principios de arquitectura limpia**, sin introducir microservicios ni complejidad adicional innecesaria para esta prueba.
-- La consulta de máximo stock retorna el producto con mayor inventario por sucursal, incluyendo identificador y nombre de la sucursal; si hay empates, el criterio de desempate se establece por identificador.
-- Terraform administra exclusivamente red, volumen y contenedor PostgreSQL del proyecto en el VPS; el contenedor API se despliega mediante Docker Compose en la misma red.
-- Por petición de evaluación, la API está accesible en `http://2.25.123.13:8088` y Swagger en `/swagger-ui/index.html`, **sin HTTPS ni autenticación de escritura**. Esto no debe adoptarse como postura de seguridad para datos reales. Se recomienda un proxy HTTPS, controles de acceso y limitación de peticiones.
+La guía de configuración está en [Despliegue](DESPLIEGUE.md).

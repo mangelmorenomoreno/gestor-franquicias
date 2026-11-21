@@ -5,4 +5,6 @@ public record ProductoMayorStockResponse(
         String nombreSucursal,
         Long idProducto,
         String nombreProducto,
-        Integer stock) {}
+        Integer stock) {
+
+}

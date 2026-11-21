@@ -4,4 +4,6 @@ public record SucursalDetalleResponse(
         Long idSucursal,
         Long idFranquicia,
         String nombre,
-        java.util.List<ProductoResponse> productos) {}
+        java.util.List<ProductoResponse> productos) {
+
+}

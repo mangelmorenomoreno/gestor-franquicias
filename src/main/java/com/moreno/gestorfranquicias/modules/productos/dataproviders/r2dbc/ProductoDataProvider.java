@@ -21,27 +21,35 @@ public class ProductoDataProvider implements IProductoDataProvider {
         this.cliente = cliente;
     }
 
+    @Override
     public Mono<ProductoEntity> buscar(Long idProducto) {
         return repositorio.findById(idProducto);
     }
 
+    @Override
     public Flux<ProductoEntity> listar() {
         return repositorio.findAllByOrderByIdProductoAsc();
     }
 
+    @Override
     public Flux<ProductoEntity> listarPorSucursal(Long idSucursal) {
         return repositorio.findByIdSucursalOrderByIdProductoAsc(idSucursal);
     }
 
+    @Override
     public Mono<ProductoEntity> guardar(ProductoEntity producto) {
         return repositorio.save(producto);
     }
 
+    @Override
     public Mono<Void> eliminar(ProductoEntity producto) {
         return repositorio.delete(producto);
     }
 
+    /** Flux: la consulta entrega un producto por cada sucursal con inventario. */
+    @Override
     public Flux<ProductoMayorStockResponse> obtenerMayorStockPorSucursal(Long idFranquicia) {
+        // ROW_NUMBER selecciona el mayor stock y usa el identificador para desempatar.
         return cliente.sql(
                         """
                 SELECT id_sucursal, nombre_sucursal, id_producto, nombre_producto, stock

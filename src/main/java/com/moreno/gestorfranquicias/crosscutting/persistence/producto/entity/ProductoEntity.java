@@ -11,4 +11,6 @@ public record ProductoEntity(
         @Column("id_sucursal") Long idSucursal,
         String nombre,
         Integer stock,
-        @Version Long version) {}
+        @Version Long version) {
+
+}
