@@ -4,7 +4,7 @@ API REST para administrar franquicias, sucursales, productos y existencias por s
 
 Desarrollada con **Java 21, Spring Boot 3.5, WebFlux, R2DBC y PostgreSQL 16**. Incluye migraciones con Flyway, pruebas con JUnit/Testcontainers, Docker y Terraform.
 
-**Documentación:** [Arquitectura](docs/ARQUITECTURA.md) · [Despliegue y GitHub Actions](docs/DESPLIEGUE.md) · [Ejemplos de los 17 endpoints](docs/EJEMPLOS_API.md) · [Terraform](infra/terraform/README.md).
+**Documentación:** [Análisis de la prueba técnica](docs/README_PRUEBA_TECNICA.md) · [Arquitectura](docs/ARQUITECTURA.md) · [Despliegue y GitHub Actions](docs/DESPLIEGUE.md) · [Ejemplos de los 17 endpoints](docs/EJEMPLOS_API.md) · [Terraform](infra/terraform/README.md).
 
 ## Ejecutar localmente
 
