@@ -7,11 +7,12 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class SucursalMapper {
-    public SucursalResumenResponse convertir(SucursalEntity entidad) {
-        return new SucursalResumenResponse(entidad.idSucursal(), entidad.nombre());
-    }
+  public SucursalResumenResponse convertir(SucursalEntity entidad) {
+    return new SucursalResumenResponse(entidad.idSucursal(), entidad.nombre());
+  }
 
-    public SucursalListadoResponse convertirListado(SucursalEntity entidad) {
-        return new SucursalListadoResponse(entidad.idSucursal(), entidad.idFranquicia(), entidad.nombre());
-    }
+  public SucursalListadoResponse convertirListado(SucursalEntity entidad) {
+    return new SucursalListadoResponse(
+        entidad.idSucursal(), entidad.idFranquicia(), entidad.nombre());
+  }
 }
