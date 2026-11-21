@@ -1,0 +1,18 @@
+name: Desplegar stage en el VPS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desplegar:
+    if: ${{ github.ref == 'refs/heads/stage' }}
+    uses: ./.github/workflows/_desplegar-ambiente.yml
+    with:
+      ambiente: stage
+      rama: stage
+      puerto: 8089
+      entorno_github: preproduccion
+    secrets: inherit

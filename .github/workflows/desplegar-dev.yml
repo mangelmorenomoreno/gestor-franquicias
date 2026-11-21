@@ -1,0 +1,18 @@
+name: Desplegar dev en el VPS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desplegar:
+    if: ${{ github.ref == 'refs/heads/dev' }}
+    uses: ./.github/workflows/_desplegar-ambiente.yml
+    with:
+      ambiente: dev
+      rama: dev
+      puerto: 8086
+      entorno_github: desarrollo
+    secrets: inherit
