@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feature/inicio-local-y-ejemplos-api
   workflow_dispatch:
 
 permissions:
@@ -32,6 +31,35 @@ jobs:
           env -u DB_USERNAME -u DB_PASSWORD docker compose config --format json \
             | python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; assert s["api"]["environment"]["DB_USERNAME"] == "gestor_franquicias"; assert s["api"]["environment"]["DB_PASSWORD"] == "franquicias_demo_local_2026"; assert s["base-datos"]["environment"]["POSTGRES_PASSWORD"] == "franquicias_demo_local_2026"'
           bash -n scripts/iniciar-local-maven.sh
+
+      - name: Validar ejemplos y script de Windows
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errores = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path "scripts/iniciar-local-maven.ps1").Path,
+              [ref]$tokens,
+              [ref]$errores) | Out-Null
+          if ($errores.Count -gt 0) {
+              $errores | ForEach-Object { Write-Error $_ }
+              exit 1
+          }
+
+      - name: Verificar contratos de ejemplo
+        run: |
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          documento = Path("docs/EJEMPLOS_API.md").read_text(encoding="utf-8")
+          ejemplos = re.findall(r"```json\n(.*?)\n```", documento, re.DOTALL)
+          assert len(ejemplos) == 17, f"Se esperaban 17 respuestas JSON de ejemplo, hay {len(ejemplos)}"
+          for ejemplo in ejemplos:
+              datos = json.loads(ejemplo)
+              assert {"code", "message", "success", "data", "errors", "timestamp"} <= datos.keys()
+          PY
 
       - name: Opción 1 - Docker Compose completo
         run: |

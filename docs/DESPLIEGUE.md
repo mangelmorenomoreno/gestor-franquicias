@@ -44,7 +44,7 @@ Los cambios en `dev`, `test` y `stage` pueden generar imágenes en GHCR si pasan
 | Archivo | Ejecución | Función |
 | --- | --- | --- |
 | [`ci.yml`](../.github/workflows/ci.yml) | Push a ramas de desarrollo y permanentes, o ejecución manual | Ejecuta `mvn clean verify`, construye `Dockerfile.runtime`, inicia cada perfil en contenedores temporales con PostgreSQL y valida Terraform. |
-| [`validar-ejecucion-local.yml`](../.github/workflows/validar-ejecucion-local.yml) | Push a `main` y rama de trabajo de la guía, o manual | Prueba los dos métodos de instalación desde cero: Docker Compose completo y API con Maven. Verifica salud, Swagger, lectura y creación de franquicias. |
+| [`validar-ejecucion-local.yml`](../.github/workflows/validar-ejecucion-local.yml) | Push a `main` o ejecución manual | Prueba desde cero Docker Compose y Maven con PostgreSQL, revisa el script PowerShell, los ejemplos JSON, la salud, Swagger, consultas y creación de franquicias. |
 | [`publicar-imagen.yml`](../.github/workflows/publicar-imagen.yml) | Después de `Validación backend` exitosa o manualmente | Publica en GHCR. Solo una validación exitosa originada en `main` activa automáticamente el despliegue productivo. |
 | [`_desplegar-ambiente.yml`](../.github/workflows/_desplegar-ambiente.yml) | Workflow reutilizable | Verifica secretos, prepara SSH, empaqueta los archivos del ambiente, crea su `.env` temporalmente desde secretos, ejecuta Terraform/Docker en el VPS y realiza comprobaciones HTTP. |
 | [`desplegar-dev.yml`](../.github/workflows/desplegar-dev.yml) | Manual desde `dev` | Preparado para desplegar el perfil de desarrollo, si se habilita su entorno. |
