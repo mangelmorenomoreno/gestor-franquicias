@@ -1,7 +1,9 @@
 package com.moreno.gestorfranquicias.modules.productos.api;
 
 import com.moreno.gestorfranquicias.crosscutting.domain.common.ApiResponse;
-import com.moreno.gestorfranquicias.crosscutting.domain.request.*;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.ActualizarNombreRequest;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.ActualizarStockRequest;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.CrearProductoRequest;
 import com.moreno.gestorfranquicias.crosscutting.domain.response.ProductoResponse;
 import com.moreno.gestorfranquicias.modules.productos.usecase.IProductoService;
 
@@ -12,7 +14,14 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import reactor.core.publisher.Mono;
 

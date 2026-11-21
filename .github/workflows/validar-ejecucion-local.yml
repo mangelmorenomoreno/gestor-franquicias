@@ -1,0 +1,115 @@
+name: Comprobar ejecución local
+
+on:
+  push:
+    branches:
+      - main
+      - feature/orden-codigo-y-guia-local
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ejecutar-localmente:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      - name: Preparar Java 21 y Maven
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Configurar base de datos local
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=clave_pruebas_ci_2026/' .env
+          docker compose config -q
+
+      - name: Opción 1 - Docker Compose completo
+        run: |
+          set -euo pipefail
+          docker compose up -d --build
+
+          disponible=false
+          for intento in $(seq 1 75); do
+            if curl -fsS --connect-timeout 3 --max-time 4 http://127.0.0.1:8088/actuator/health |
+              python3 -c 'import json,sys; assert json.load(sys.stdin)["status"] == "UP"' >/dev/null 2>&1; then
+              disponible=true
+              break
+            fi
+            sleep 3
+          done
+          if [[ "$disponible" != true ]]; then
+            echo "La API no inició correctamente con Docker Compose." >&2
+            exit 1
+          fi
+
+          curl -fsS http://127.0.0.1:8088/v3/api-docs |
+            python3 -c 'import json,sys; assert "/api/v1/franquicias" in json.load(sys.stdin)["paths"]'
+          curl -fsSL http://127.0.0.1:8088/swagger-ui/index.html -o /dev/null
+          curl -fsS http://127.0.0.1:8088/api/v1/franquicias |
+            python3 -c 'import json,sys; assert json.load(sys.stdin)["success"] is True'
+          curl -fsS -X POST -H "Content-Type: application/json" \
+            -d '{"nombre":"Prueba local con Docker"}' http://127.0.0.1:8088/api/v1/franquicias |
+            python3 -c 'import json,sys; assert json.load(sys.stdin)["success"] is True'
+
+      - name: Opción 2 - Spring Boot con Maven y PostgreSQL Docker
+        run: |
+          set -euo pipefail
+          docker compose stop api
+          docker compose up -d base-datos
+
+          set -a
+          source .env
+          set +a
+          export DB_URL="r2dbc:postgresql://127.0.0.1:5434/gestor_franquicias"
+          export DB_MIGRATION_URL="jdbc:postgresql://127.0.0.1:5434/gestor_franquicias"
+
+          mvn -B -ntp spring-boot:run > /tmp/gestor-franquicias-local.log 2>&1 &
+          proceso_maven=$!
+          trap 'kill "$proceso_maven" 2>/dev/null || true' EXIT
+
+          disponible=false
+          for intento in $(seq 1 75); do
+            if curl -fsS --connect-timeout 3 --max-time 4 http://127.0.0.1:8080/actuator/health |
+              python3 -c 'import json,sys; assert json.load(sys.stdin)["status"] == "UP"' >/dev/null 2>&1; then
+              disponible=true
+              break
+            fi
+            if ! kill -0 "$proceso_maven" 2>/dev/null; then
+              cat /tmp/gestor-franquicias-local.log
+              exit 1
+            fi
+            sleep 3
+          done
+          if [[ "$disponible" != true ]]; then
+            tail -100 /tmp/gestor-franquicias-local.log
+            exit 1
+          fi
+
+          curl -fsS http://127.0.0.1:8080/v3/api-docs |
+            python3 -c 'import json,sys; assert "/api/v1/franquicias" in json.load(sys.stdin)["paths"]'
+          curl -fsSL http://127.0.0.1:8080/swagger-ui/index.html -o /dev/null
+          curl -fsS http://127.0.0.1:8080/api/v1/franquicias |
+            python3 -c 'import json,sys; assert json.load(sys.stdin)["success"] is True'
+          curl -fsS -X POST -H "Content-Type: application/json" \
+            -d '{"nombre":"Prueba local con Maven"}' http://127.0.0.1:8080/api/v1/franquicias |
+            python3 -c 'import json,sys; assert json.load(sys.stdin)["success"] is True'
+
+      - name: Revisar registros ante un error
+        if: failure()
+        run: |
+          docker compose ps || true
+          docker compose logs --no-color --tail=80 || true
+          test ! -f /tmp/gestor-franquicias-local.log || tail -100 /tmp/gestor-franquicias-local.log
+
+      - name: Limpiar entorno de pruebas
+        if: always()
+        run: docker compose down -v --remove-orphans || true

@@ -1,8 +1,12 @@
 package com.moreno.gestorfranquicias.modules.franquicias.api;
 
 import com.moreno.gestorfranquicias.crosscutting.domain.common.ApiResponse;
-import com.moreno.gestorfranquicias.crosscutting.domain.request.*;
-import com.moreno.gestorfranquicias.crosscutting.domain.response.*;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.ActualizarNombreRequest;
+import com.moreno.gestorfranquicias.crosscutting.domain.request.CrearFranquiciaRequest;
+import com.moreno.gestorfranquicias.crosscutting.domain.response.FranquiciaDetalleResponse;
+import com.moreno.gestorfranquicias.crosscutting.domain.response.FranquiciaResumenResponse;
+import com.moreno.gestorfranquicias.crosscutting.domain.response.ProductoMayorStockResponse;
+import com.moreno.gestorfranquicias.crosscutting.domain.response.SucursalResumenResponse;
 import com.moreno.gestorfranquicias.modules.franquicias.usecase.IFranquiciaService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,7 +16,13 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import reactor.core.publisher.Mono;
 
@@ -46,7 +56,7 @@ public class FranquiciaController {
     @Operation(summary = "Consultar todas las franquicias")
     public Mono<ResponseEntity<ApiResponse<List<FranquiciaResumenResponse>>>> listar() {
         return servicio.listar()
-                .collectList()
+                .collectList() // La respuesta HTTP necesita una lista, aunque el servicio use Flux.
                 .map(
                         registros ->
                                 ResponseEntity.ok(
