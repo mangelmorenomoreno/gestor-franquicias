@@ -43,6 +43,11 @@ fi
 if ! command -v terraform >/dev/null 2>&1; then
   echo "Instalando Terraform desde el repositorio oficial..."
   export DEBIAN_FRONTEND=noninteractive
+  keyring="/usr/share/keyrings/hashicorp-archive-keyring.gpg"
+  # Repara la clave pública de una instalación previa ANTES del primer apt-get update.
+  if [[ -f "$keyring" ]]; then
+    chmod 0644 "$keyring"
+  fi
   apt-get update
   apt-get install -y --no-install-recommends curl ca-certificates gnupg
   keyring="/usr/share/keyrings/hashicorp-archive-keyring.gpg"
