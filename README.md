@@ -1,12 +1,19 @@
 # Gestor de Franquicias
 
-API REST para administrar franquicias, sucursales y productos. La estoy desarrollando como parte de una prueba técnica de backend, utilizando Java, Spring Boot y PostgreSQL.
+API REST desarrollada como prueba técnica de Backend Developer. Administra franquicias, sucursales y productos, con control de inventario por sucursal y consulta del producto con mayor stock en cada una.
 
-La idea es manejar la información de cada franquicia, sus sucursales y el stock de los productos de forma independiente. También se podrá consultar qué producto tiene la mayor cantidad disponible en cada sucursal de una franquicia.
+**Estado verificado (20 de noviembre de 2026, hora de Colombia):** el commit `33001291d0e031838af99171d5882cd793c29d87` se compiló y publicó en GHCR, se desplegó en el VPS y pasó las comprobaciones de la API, PostgreSQL, Swagger y OpenAPI desde un ejecutor externo de GitHub Actions. [Ver ejecución exitosa #44859340375](https://github.com/mangelmorenomoreno/gestor-franquicias/actions/runs/44859340375). Las versiones posteriores deben verificarse con sus propias ejecuciones.
 
-> **Estado del proyecto:** API REST implementada y verificada mediante GitHub Actions con Java 21, pruebas automatizadas, PostgreSQL, Docker y Terraform. El despliegue de producción en el VPS es una actividad independiente y todavía no se ha realizado.
+**Acceso a la demostración (solo datos de prueba):**
 
-**Ambientes independientes:** `dev` (puerto 8086), `test` (8087), `stage` (8089) y `prod` (8088). Cada uno dispone de un perfil Spring, archivo Docker Compose, red, base PostgreSQL, volumen y estado Terraform independientes. Primero se valida la conexión de `dev`; el flujo posterior respeta `dev → test → stage → main`. Los procedimientos y workflows se describen en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
+- [Swagger UI público](http://2.25.123.13:8088/swagger-ui/index.html)
+- [Especificación OpenAPI](http://2.25.123.13:8088/v3/api-docs)
+- [Estado de salud](http://2.25.123.13:8088/actuator/health)
+- [Consulta de franquicias](http://2.25.123.13:8088/api/v1/franquicias)
+
+**Inicio rápido local (Docker):** `git clone https://github.com/mangelmorenomoreno/gestor-franquicias.git` → `cd gestor-franquicias` → copiar `.env.example` a `.env` y establecer una contraseña local → `docker compose up -d --build` → abrir [Swagger local](http://localhost:8088/swagger-ui/index.html). No requiere instalar Java en el equipo: Docker compila y ejecuta el backend. Para instrucciones de Windows, Linux/macOS, Maven y resolución de problemas, consultar [`8. Ejecución local`](#8-ejecución-local).
+
+La aplicación utiliza Java 21, Spring Boot 3.5, WebFlux, R2DBC, PostgreSQL 16, Flyway, Docker, Terraform y GitHub Actions. Los perfiles lógicos `dev`, `test`, `stage` y `prod` se validan en CI; **solo `prod` se despliega en el VPS en el flujo automático**. Los demás perfiles no se exponen públicamente. Véase [Guía de despliegue](docs/DESPLIEGUE.md) y [Arquitectura](docs/ARQUITECTURA.md).
 
 ## 1. Funcionalidades
 
@@ -23,7 +30,7 @@ La idea es manejar la información de cada franquicia, sus sucursales y el stock
 
 ### Funcionalidades adicionales
 
-También voy a incluir los puntos extra planteados en la prueba:
+Se incluyeron los puntos extra planteados en la prueba:
 
 - Cambiar el nombre de una franquicia.
 - Cambiar el nombre de una sucursal.
@@ -33,7 +40,7 @@ También voy a incluir los puntos extra planteados en la prueba:
 - Definir la infraestructura necesaria con Terraform.
 - Desplegar la API y PostgreSQL en la nube.
 
-Además voy a incluir validaciones, manejo de errores, migraciones de base de datos, pruebas automatizadas y documentación OpenAPI/Swagger.
+También se incorporaron validaciones, manejo de errores, migraciones de base de datos, pruebas automatizadas y documentación OpenAPI/Swagger.
 
 ## 2. Tecnologías
 
@@ -53,7 +60,7 @@ Además voy a incluir validaciones, manejo de errores, migraciones de base de da
 | Repositorio y automatización | GitHub y GitHub Actions |
 | Despliegue | VPS Linux en la nube |
 
-Voy a utilizar R2DBC para el acceso reactivo a PostgreSQL. Flyway manejará las migraciones de manera independiente usando una conexión JDBC para ese proceso.
+Se utiliza R2DBC para el acceso reactivo a PostgreSQL. Flyway manejará las migraciones de manera independiente usando una conexión JDBC para ese proceso.
 
 ## 3. Modelo de datos
 
@@ -160,13 +167,13 @@ CREATE INDEX idx_productos_sucursal_stock
 | Eliminar una franquicia o sucursal con dependencias | Se restringe para no borrar información relacionada por accidente |
 | Actualizaciones simultáneas de stock | Se controlarán con una versión del registro y manejo de conflictos |
 
-La unicidad de nombres y el control de versión son reglas que estoy agregando como decisiones de diseño, no como exigencias expresas de Accenture. Voy a normalizar los nombres al recibirlos para evitar espacios adicionales y aplicar validación tanto en la API como en la base de datos.
+La unicidad de nombres y el control de versión son decisiones de diseño adicionales, no exigencias expresas de Accenture. Los nombres se normalizan y validan en la API y en la base de datos.
 
-**No voy a agregar por ahora endpoints para eliminar franquicias o sucursales.** La prueba solo solicita eliminar productos. Por eso tampoco configuraré eliminaciones en cascada que puedan borrar inventario de manera accidental.
+**No se incluyeron endpoints para eliminar franquicias o sucursales.** La prueba solo solicita eliminar productos. Por eso tampoco configuraré eliminaciones en cascada que puedan borrar inventario de manera accidental.
 
-### Cómo voy a consultar las relaciones
+### Cómo se consultan las relaciones
 
-Como utilizaré R2DBC, no voy a depender de carga automática de colecciones como si estuviera trabajando con JPA. Haré las consultas por los identificadores relacionados y armaré los DTO de respuesta de manera explícita.
+Con R2DBC no se depende de carga automática de colecciones estilo JPA. Se consultan los identificadores relacionados y se arman explícitamente los DTO de respuesta.
 
 Por ejemplo, para consultar una franquicia con sucursales, obtendré la franquicia y sus sucursales por `id_franquicia`. Para consultar una sucursal con productos, obtendré la sucursal y sus productos por `id_sucursal`. Evitaré ejecutar una consulta adicional por cada registro cuando pueda traer el conjunto en una sola consulta.
 
@@ -383,7 +390,7 @@ Antes de ejecutar esta consulta verificaré que la franquicia exista, para difer
 
 ## 5. Validaciones y manejo de errores
 
-Voy a validar tanto los datos de entrada como las relaciones entre registros:
+Se validan los datos de entrada y las relaciones entre registros:
 
 - No aceptar nombres vacíos ni nombres de más de 120 caracteres.
 - No crear sucursales cuando la franquicia no exista.
@@ -440,7 +447,7 @@ Las decisiones están detalladas en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)
 
 ## 7. Flujo de trabajo con Git
 
-No voy a desarrollar directamente sobre `main`. Después de dejar lista la documentación inicial, voy a manejar estas ramas permanentes:
+El flujo habitual de integración utiliza pull requests hacia estas ramas permanentes. Las correcciones excepcionales de producción pueden aplicarse directamente a `main` y sincronizarse luego a los demás ambientes:
 
 | Rama | Uso |
 | --- | --- |
@@ -449,7 +456,7 @@ No voy a desarrollar directamente sobre `main`. Después de dejar lista la docum
 | `stage` | Validación de la versión candidata a producción |
 | `main` | Código estable para producción |
 
-Las ramas se crearán inicialmente en este orden: `stage` desde `main`, `test` desde `stage` y `dev` desde `test`.
+Las ramas ya existen y se mantienen sincronizadas tras cada promoción o corrección urgente.
 
 El flujo normal será:
 
@@ -478,123 +485,165 @@ feature/* o bugfix/*
 5. Los cambios urgentes de producción utilizarán `hotfix/*` desde `main` y después se llevarán también a las ramas anteriores para mantenerlas sincronizadas.
 6. No se realizará un despliegue de producción desde una rama de desarrollo.
 
-GitHub Actions se configurará para compilar y ejecutar las pruebas de acuerdo con cada etapa. El despliegue al VPS se realizará desde `main`, una vez superadas las validaciones.
+GitHub Actions compila y ejecuta pruebas con cada etapa. El despliegue automático al VPS se ejecuta únicamente desde `main`, después de completar las validaciones.
 
 ## 8. Ejecución local
 
-### Requisitos
+Hay dos formas independientes de ejecutar el proyecto: **todo con Docker Compose** o **API con Maven + PostgreSQL en Docker**. Utilice una sola modalidad para la API a la vez.
 
-Docker y Docker Compose. Si quiero ejecutar la API fuera de Docker, necesito también Java 21 y Maven.
+### Opción A — Docker Compose (recomendada para evaluar)
 
-### Iniciar la aplicación con Docker
+**Requisitos:** Git y Docker Engine con el plugin Docker Compose (o Docker Desktop en Windows/macOS), con el daemon en ejecución. No hace falta instalar Java ni Maven. Para construir las imágenes se necesita acceso a Internet la primera vez.
+
+**1. Descargar el repositorio**
 
 ~~~bash
 git clone https://github.com/mangelmorenomoreno/gestor-franquicias.git
 cd gestor-franquicias
+~~~
+
+**2. Crear configuración local**
+
+En Linux/macOS:
+
+~~~bash
 cp .env.example .env
 ~~~
 
-Debo reemplazar la contraseña del archivo `.env` por una clave segura. Después:
+En Windows PowerShell:
+
+~~~powershell
+Copy-Item .env.example .env
+~~~
+
+Abra `.env` y cambie `DB_PASSWORD` por una contraseña **local y privada** (conserve `DB_USERNAME=gestor_franquicias`). No suba este archivo a Git ni utilice credenciales del VPS. Esta contraseña se utiliza en los dos contenedores del Compose local.
+
+**3. Construir e iniciar**
 
 ~~~bash
 docker compose up -d --build
 docker compose ps
 ~~~
 
-Las direcciones previstas en el entorno local son:
+`docker-compose.yml` construye la API desde el código fuente mediante el `Dockerfile` multietapa, inicia PostgreSQL 16 y espera a que esté saludable antes de iniciar la API. Flyway aplica las migraciones al arrancar Spring Boot. La primera compilación puede tardar por la descarga de dependencias.
 
-- API: `http://localhost:8088`
-- Swagger: `http://localhost:8088/swagger-ui.html`
-- Estado de salud: `http://localhost:8088/actuator/health`
-- PostgreSQL: `localhost:5434` (solo accesible desde mi equipo)
+**4. Verificar**
 
-Flyway utiliza JDBC para aplicar las migraciones y la API utiliza R2DBC para consultar PostgreSQL.
+~~~bash
+curl -fsS http://localhost:8088/actuator/health
+curl -fsS http://localhost:8088/api/v1/franquicias
+curl -fsS http://localhost:8088/v3/api-docs
+~~~
 
-### Ejecutar con Maven
+El primer comando debe devolver `{"status":"UP"}`. La lista de franquicias puede estar vacía en una base nueva; la consulta debe responder satisfactoriamente. Abra `http://localhost:8088/swagger-ui/index.html` para probar el resto de operaciones desde el navegador. También puede usar `http://localhost:8088/swagger-ui.html`.
+
+Puertos **solo de la máquina local** (enlazados a `127.0.0.1` en el Compose local):
+
+| Servicio | Dirección local | Puerto interno |
+| --- | --- | --- |
+| API REST y Swagger | `http://localhost:8088` | 8080 |
+| PostgreSQL | `localhost:5434` | 5432 |
+
+**5. Logs y apagado**
+
+~~~bash
+docker compose logs -f api
+# En otra terminal, para detener:
+docker compose down
+~~~
+
+`docker compose down` **conserva** el volumen PostgreSQL. `docker compose down -v` lo elimina y **borra los datos locales**; usarlo exclusivamente cuando se desee reinicializar la base de pruebas.
+
+### Opción B — Java 21 + Maven, con PostgreSQL en Docker
+
+**Requisitos:** Java JDK 21, Maven compatible con Java 21, Git y Docker. Si utiliza esta opción, detenga previamente la API del Compose completo con `docker compose stop api`.
 
 ~~~bash
 docker compose up -d base-datos
+~~~
+
+Abra `.env` y utilice exactamente el mismo usuario y contraseña en la aplicación Java. En Linux/macOS:
+
+~~~bash
 export DB_URL="r2dbc:postgresql://localhost:5434/gestor_franquicias"
 export DB_MIGRATION_URL="jdbc:postgresql://localhost:5434/gestor_franquicias"
 export DB_USERNAME="gestor_franquicias"
-export DB_PASSWORD="CLAVE_CONFIGURADA_EN_ENV"
+export DB_PASSWORD="CLAVE_ESTABLECIDA_EN_ENV"
 mvn spring-boot:run
 ~~~
 
-En Windows PowerShell, debo cambiar `export` por `$env:NOMBRE_VARIABLE = "valor"`.
+En Windows PowerShell:
 
-### Ejecutar pruebas
-
-~~~bash
-mvn clean verify
+~~~powershell
+$env:DB_URL = "r2dbc:postgresql://localhost:5434/gestor_franquicias"
+$env:DB_MIGRATION_URL = "jdbc:postgresql://localhost:5434/gestor_franquicias"
+$env:DB_USERNAME = "gestor_franquicias"
+$env:DB_PASSWORD = "CLAVE_ESTABLECIDA_EN_ENV"
+mvn spring-boot:run
 ~~~
 
-Las pruebas de integración requieren Docker porque utilizan Testcontainers y una instancia temporal de PostgreSQL.
+Sustituya `CLAVE_ESTABLECIDA_EN_ENV` por el valor de `DB_PASSWORD` de su archivo local. Spring Boot utiliza el perfil `dev` por defecto y escucha en `http://localhost:8080` cuando arranca mediante Maven (la publicación en `8088` corresponde a Docker Compose). La documentación estará en `http://localhost:8080/swagger-ui/index.html`.
 
-**Validación técnica:** la compilación, las pruebas y la construcción de la imagen se verifican mediante GitHub Actions en cada ambiente. El flujo de CI utiliza una instancia temporal de PostgreSQL con Testcontainers y valida también Terraform. El despliegue real al VPS requiere una configuración independiente.
+### Ejecución de pruebas y revisión de calidad
+
+Con Docker en ejecución (Testcontainers utiliza una base PostgreSQL temporal):
+
+~~~bash
+mvn -B clean verify
+~~~
+
+Incluye pruebas del backend y validación de migraciones según las suites del proyecto. GitHub Actions ejecuta además una construcción de imagen, comprueba los perfiles Spring `dev/test/stage/prod` con PostgreSQL y valida la configuración de Terraform. Los tests unitarios e integración no deben usar la base de producción.
+
+**Prueba de escritura manual (solo en local o en datos de demostración):**
+
+~~~bash
+curl -i -X POST http://localhost:8088/api/v1/franquicias \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Franquicia de prueba local"}'
+~~~
+
+En PowerShell:
+
+~~~powershell
+Invoke-RestMethod -Uri "http://localhost:8088/api/v1/franquicias" -Method Post -ContentType "application/json" -Body '{"nombre":"Franquicia de prueba local"}'
+~~~
+
+Después, ejecute `GET /api/v1/franquicias` en Swagger o por `curl` y compruebe que la franquicia aparezca. La API utiliza un envoltorio estándar de respuesta que contiene `code`, `message`, `success`, `data`, `errors` y `timestamp`; los ejemplos de entidades de la sección 4 representan el contenido lógico de `data`.
+
+### Problemas comunes
+
+- **Docker no responde:** iniciar Docker Desktop / el servicio Docker y comprobar `docker version`.
+- **Puertos ocupados:** el Compose local reserva `8088` para API y `5434` para PostgreSQL. Detenga el proceso que los utiliza o ajuste los puertos de `docker-compose.yml`; si cambia `5434`, ajuste también las URLs JDBC/R2DBC al ejecutar con Maven.
+- **La base no autentica:** asegúrese de que las variables de la API y del contenedor coincidan. Cambiar `DB_PASSWORD` después de crear el volumen **no cambia la contraseña del usuario PostgreSQL existente**; gestione la contraseña desde PostgreSQL o restablezca solo la base local si puede perder esos datos.
+- **La API no arranca:** revise `docker compose logs --tail=100 api` y `docker compose logs --tail=100 base-datos`.
+- **Testcontainers falla:** confirme que Docker esté en ejecución y sea accesible para el usuario que lanza Maven.
+- **Swagger no abre:** compruebe primero `/actuator/health`, luego `/v3/api-docs` y finalmente `/swagger-ui/index.html`.
 
 ## 9. Despliegue en la nube
 
-Para la prueba voy a utilizar un VPS Linux con Docker. La API y PostgreSQL estarán en recursos independientes del resto de aplicaciones del servidor.
+El ambiente `prod` está desplegado en un VPS Linux y publica la API en `http://2.25.123.13:8088`. La base PostgreSQL y su volumen persisten en la red privada Docker; Terraform administra la red, el contenedor de PostgreSQL y el volumen del proyecto. El empaquetado en producción usa `Dockerfile.runtime` con el JAR generado y validado previamente en CI.
 
-La ruta prevista es:
+Al integrar cambios en `main`, el flujo normal es: **validar Maven/Testcontainers y Terraform → publicar imagen en GHCR etiquetada por SHA → desplegar solo producción por SSH → comprobar salud interna → probar desde Internet salud, OpenAPI, Swagger y lectura de franquicias**. El último despliegue funcional verificado para esta entrega es [GitHub Actions #44859340375](https://github.com/mangelmorenomoreno/gestor-franquicias/actions/runs/44859340375), commit `33001291d0e031838af99171d5882cd793c29d87`. Para revisiones posteriores consultar la ejecución del commit correspondiente.
 
-~~~text
-/opt/gestor-franquicias/
-~~~
+La configuración de los secretos, las comprobaciones de despliegue, el aislamiento de perfiles y el procedimiento de recuperación se explican en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
 
-La base de datos tendrá su volumen persistente y no expondrá su puerto a Internet. La API utilizará un puerto específico del servidor. Por seguridad el acceso inicial queda limitado a `127.0.0.1`, hasta configurar el firewall y permitir la IP de evaluación.
+**Seguridad de la demostración:** el puerto `8088` de producción está expuesto públicamente en HTTP y actualmente la prueba no exige autenticación en los endpoints de escritura. Por ello, utilizar exclusivamente datos ficticios y no registrar información personal ni sensible. Para utilización real incorporar HTTPS, autenticación/autorización y límites de peticiones.
 
-Terraform se utilizará para describir y reproducir los recursos de esta aplicación que sean apropiados para administrar como código. No se modificarán los contenedores ni los volúmenes de otras aplicaciones.
+## 10. Estrategia de pruebas
 
-La compilación y las pruebas se verifican mediante GitHub Actions, incluyendo el arranque real de la imagen Docker y su conexión a PostgreSQL. La instalación en el VPS queda pendiente de configurar los accesos y ejecutar el despliegue. Dejé el procedimiento en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md); una vez publicado, registraré la URL real y las comprobaciones de funcionamiento.
+Las pruebas implementadas y las validaciones de CI se enfocan en reglas del dominio, validación de nombres, integridad referencial, stock no negativo, concurrencia mediante versión, relaciones entre franquicias/sucursales/productos, consulta de máximo stock por sucursal, migraciones Flyway y persistencia con PostgreSQL/Testcontainers.
 
-## 10. Pruebas
+Para comprobar manualmente criterios de aceptación, crear por Swagger una franquicia, asociarle dos sucursales, crear productos con diferentes cantidades, actualizar un stock, consultar el máximo por sucursal, renombrar cada tipo de entidad y eliminar un producto. Repetir la consulta para verificar que desapareció. Usar solamente una base de prueba (preferiblemente local).
 
-Voy a cubrir tanto los casos correctos como las relaciones entre registros:
+El flujo CI comprueba adicionalmente Docker Compose, Terraform y las rutas públicas de solo lectura una vez desplegado el perfil `prod`. El resultado visible por commit queda en la pestaña [Actions](https://github.com/mangelmorenomoreno/gestor-franquicias/actions).
 
-- Crear una franquicia y consultarla después.
-- Consultar el listado general de franquicias.
-- Consultar una franquicia con varias sucursales, sin indicar una sucursal específica.
-- Consultar una franquicia existente sin sucursales y recibir una lista vacía.
-- Consultar únicamente las sucursales de una franquicia.
-- Consultar una sucursal con varios productos, sin indicar un producto específico.
-- Consultar una sucursal existente sin productos y recibir una lista vacía.
-- Consultar únicamente los productos de una sucursal.
-- Verificar que una consulta no incluya sucursales ni productos de otros registros padres.
-- Consultar un producto que pertenece a otra sucursal y recibir `404`.
-- Intentar crear una sucursal con franquicia inexistente.
-- Intentar crear un producto con sucursal inexistente.
-- Rechazar nombres vacíos, nombres duplicados dentro del mismo padre y stock negativo.
-- Actualizar y eliminar un producto validando la sucursal a la que pertenece.
-- Actualizar los nombres de franquicias, sucursales y productos.
-- Consultar el mayor stock con varias sucursales y diferentes cantidades.
-- Resolver empates de stock y excluir sucursales sin productos del resultado de máximos.
-- Comprobar conflictos de actualización de stock.
-- Verificar restricciones y persistencia real mediante PostgreSQL.
+## 11. Estado de la entrega
 
-Utilizaré pruebas unitarias para la lógica de negocio y pruebas de integración con Testcontainers para validar las consultas, las relaciones y las restricciones en PostgreSQL.
+- [x] Endpoints obligatorios: franquicias, sucursales, productos, eliminación, actualización de stock y máximo por sucursal.
+- [x] Funcionalidades opcionales: renombrado, API reactiva, Docker, Terraform y despliegue en nube.
+- [x] Validaciones, migraciones, estructura modular y pruebas automatizadas.
+- [x] Flujo de integración `dev → test → stage → main` y publicación GHCR.
+- [x] Despliegue de producción verificado y endpoints públicos de solo lectura probados desde GitHub Actions.
+- [x] Instrucciones de ejecución local con Docker y Maven.
 
-## 11. Avance del proyecto
-
-- [x] Crear el repositorio y definir los requisitos.
-- [x] Crear y organizar las ramas permanentes `dev`, `test`, `stage` y `main`.
-- [x] Incorporar la estructura modular con responsabilidades independientes.
-- [x] Implementar los endpoints obligatorios y las consultas relacionadas.
-- [x] Agregar los cambios de nombre de franquicia, sucursal y producto.
-- [x] Crear migraciones de PostgreSQL, Docker y Docker Compose.
-- [x] Incorporar pruebas unitarias, integración y archivos iniciales de CI.
-- [x] Preparar la infraestructura de PostgreSQL con Terraform.
-- [x] Compilar y ejecutar las pruebas con Maven y Docker en GitHub Actions.
-- [x] Corregir las incidencias detectadas durante la validación de CI.
-- [x] Integrar la versión funcional mediante PR a `dev`.
-- [x] Configurar un flujo de promoción mediante PR desde `dev` hasta `main`.
-- [ ] Configurar los secretos SSH y desplegar la API en el VPS.
-- [ ] Validar los endpoints publicados y registrar la URL.
-
-Actualizaré esta documentación con los resultados reales de las validaciones y del despliegue.
-
-
-### Despliegue en producción por PR
-
-Al fusionar un PR en `main`, GitHub Actions ejecuta el CI, publica la imagen del SHA verificado en GHCR y despliega automáticamente el perfil `prod` en el VPS **solo después de que las etapas anteriores hayan finalizado correctamente**. No se despliega al abrir el PR, ni se instalan `dev`, `test` o `stage` en el VPS. Consulte [la guía de despliegue](docs/DESPLIEGUE.md). El acceso al backend permanece vinculado a `127.0.0.1:8088` hasta configurar un canal seguro de acceso externo.
+**Evidencia del despliegue:** [workflow #44859340375](https://github.com/mangelmorenomoreno/gestor-franquicias/actions/runs/44859340375), SHA `33001291d0e031838af99171d5882cd793c29d87`. Esta evidencia corresponde exactamente a ese commit; un cambio posterior en documentación u otros archivos debe validarse con su propio flujo.
