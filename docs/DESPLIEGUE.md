@@ -17,7 +17,9 @@ El directorio efectivo del despliegue de producción es `/opt/gestor-franquicias
 
 Cada perfil está preparado para conservar su propio estado Terraform, red Docker, contenedor PostgreSQL 16, volumen persistente y contenedor Spring Boot; en el VPS de esta entrega únicamente se instala producción. Todos pueden llamar a su base `gestor_franquicias` porque son instancias independientes; la dirección `base-datos` se resuelve únicamente dentro de la red correspondiente.
 
-| Perfil | Red privada | Contenedor PostgreSQL | Volumen de datos |
+**Nombres previstos para los recursos en caso de desplegar cada perfil (no indican instalaciones existentes):**
+
+| Perfil | Red Docker definida | Nombre previsto del contenedor PostgreSQL | Volumen previsto |
 |---|---|---|---|
 | dev | `gestor-franquicias-dev-red` | `gestor-franquicias-dev-postgres` | `gestor-franquicias-dev-datos` |
 | test | `gestor-franquicias-test-red` | `gestor-franquicias-test-postgres` | `gestor-franquicias-test-datos` |
