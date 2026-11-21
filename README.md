@@ -103,6 +103,8 @@ curl -fsS http://localhost:8088/api/v1/franquicias
 curl -fsS http://localhost:8088/v3/api-docs
 ```
 
+En Windows PowerShell también puede ejecutar las consultas con `curl.exe` (en lugar del alias `curl`).
+
 El endpoint de salud debe responder con `"status":"UP"`. En una instalación nueva, la lista de franquicias puede estar vacía.
 
 Para ejecutar las pruebas unitarias y de integración (requiere Docker activo para Testcontainers):
