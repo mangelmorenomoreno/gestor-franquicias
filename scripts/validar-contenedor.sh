@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+perfil="${PERFIL:-dev}"
+case "$perfil" in dev|test|stage|prod) ;; *) echo "Perfil no permitido" >&2; exit 1 ;; esac
+
 identificador="franquicias-ci-${GITHUB_RUN_ID:-local}-$$"
 red="red-${identificador}"
 base_datos="postgres-${identificador}"
@@ -36,6 +39,7 @@ docker run -d --name "$aplicacion" --network "$red" \
     --publish "127.0.0.1:$puerto_api:8080" \
     --read-only --tmpfs /tmp:rw,nosuid,size=64m --cap-drop ALL \
     --security-opt no-new-privileges:true \
+    -e "SPRING_PROFILES_ACTIVE=$perfil" \
     -e DB_URL=r2dbc:postgresql://base-datos:5432/gestor_franquicias \
     -e DB_MIGRATION_URL=jdbc:postgresql://base-datos:5432/gestor_franquicias \
     -e DB_USERNAME=gestor_franquicias -e "DB_PASSWORD=$clave_base_datos" \
@@ -59,7 +63,7 @@ verificar_api() {
         exit 1
     fi
 }
-echo "Comprobando arranque de la API y migraciones Flyway..."
+echo "Comprobando conexión R2DBC y migración Flyway para el perfil $perfil..."
 verificar_api
 
 respuesta="$(curl -fsS --max-time 10 -X POST \
@@ -76,4 +80,4 @@ docker restart "$aplicacion" >/dev/null
 verificar_api
 curl -fsS --max-time 10 "http://127.0.0.1:$puerto_api/api/v1/franquicias/$id_franquicia" \
     | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["success"]; assert r["data"]["nombre"] == "Validacion de contenedor"'
-echo "Validación del contenedor finalizada correctamente."
+echo "Conexión, migraciones y persistencia verificadas con perfil $perfil."
