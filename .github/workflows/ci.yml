@@ -2,7 +2,7 @@ name: Validación backend
 
 on:
   push:
-    branches: [dev, test, stage, main, feature/validacion-final-entrega]
+    branches: [dev, test, stage, main, feature/despliegue-vps-automatizado]
   workflow_dispatch:
 
 permissions:
@@ -41,6 +41,11 @@ jobs:
 
       - name: Validar arranque real de la imagen y persistencia
         run: bash scripts/validar-contenedor.sh
+
+      - name: Comprobar sintaxis del despliegue automatizado
+        run: |
+          bash -n scripts/desplegar-vps.sh
+          bash -n scripts/validar-contenedor.sh
 
       - name: Validar configuración de Docker Compose
         env:
