@@ -7,6 +7,7 @@ public interface IProductoService {
 
 Mono<ProductoResponse> crear(Long idSucursal, CrearProductoRequest datos);
 Mono<ProductoResponse> consultar(Long idSucursal, Long idProducto);
+Flux<ProductoResponse> listar();
 Mono<ProductoResponse> cambiarStock(Long idSucursal, Long idProducto, ActualizarStockRequest datos);
 Mono<ProductoResponse> cambiarNombre(Long idSucursal, Long idProducto, ActualizarNombreRequest datos);
 Mono<Void> eliminar(Long idSucursal, Long idProducto);

@@ -2,7 +2,7 @@ name: Validación backend
 
 on:
   push:
-    branches: [dev, test, stage, main, feature/configuracion-ambientes]
+    branches: [dev, test, stage, main, 'feature/**', 'bugfix/**']
   workflow_dispatch:
 
 permissions:

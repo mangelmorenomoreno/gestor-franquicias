@@ -13,6 +13,16 @@ import static org.mockito.Mockito.*;
 
 class SucursalServiceTest {
     @Test
+    void consultarTodasLasSucursalesDevuelveVacioSiNoHayRegistros() {
+        var sucursales = mock(ISucursalDataProvider.class);
+        when(sucursales.listar()).thenReturn(Flux.empty());
+        var servicio = new SucursalService(mock(IFranquiciaDataProvider.class), sucursales,
+                mock(IProductoDataProvider.class), new SucursalMapper(), new ProductoMapper());
+        StepVerifier.create(servicio.listar()).verifyComplete();
+        verify(sucursales).listar();
+    }
+
+    @Test
     void consultarSucursalSinProductosDevuelveListaVacia() {
         var franquicias = mock(IFranquiciaDataProvider.class);
         var sucursales = mock(ISucursalDataProvider.class);
