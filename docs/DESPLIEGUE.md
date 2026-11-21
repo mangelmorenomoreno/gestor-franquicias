@@ -30,6 +30,8 @@ La integración sigue `feature/* → dev → test → stage → main` mediante P
 
 El workflow `Publicar imagen Docker` publica una etiqueta inmutable con el SHA del commit de cada rama permanente **solamente después de CI exitoso**. La etiqueta `latest` se actualiza únicamente desde `main`; no se utiliza para despliegues.
 
+La primera vez que se habilite esta configuración, puede que una rama todavía no tenga su imagen publicada con el SHA actual. En ese caso se debe ejecutar una sola vez `Actions → Publicar imagen Docker → Run workflow` seleccionando dicha rama. La publicación manual también ejecuta las pruebas Maven antes de subir la imagen; en integraciones posteriores la publicación ocurre automáticamente tras CI exitoso.
+
 Los cuatro workflows de despliegue manual son:
 
 - `Desplegar dev en el VPS` desde la rama `dev`.
