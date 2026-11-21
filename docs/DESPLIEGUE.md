@@ -1,72 +1,127 @@
-# Despliegue
+# Despliegue y automatización
 
-La aplicación utiliza GitHub Actions, GHCR, Docker y Terraform. El despliegue automático se realiza **únicamente desde `main` hacia producción**.
+La aplicación usa **GitHub Actions** para compilar, ejecutar pruebas y publicar imágenes Docker en GHCR. Cuando la validación de `main` finaliza correctamente, el despliegue de producción se ejecuta de forma automática en el VPS.
 
 ## Ambientes
 
-Los puertos de desarrollo, pruebas y preproducción están configurados para posibles instalaciones separadas. En este VPS **solo se ejecuta `prod`**.
+Las cuatro configuraciones se validan durante la integración continua. En el VPS **solo está desplegado `prod`**. Los puertos de los otros perfiles están definidos para posibles despliegues independientes; no son servicios activos en ese servidor.
 
-| Perfil | Rama | Puerto configurado | VPS |
+| Perfil | Rama | Puerto configurado | Estado en el VPS |
 | --- | --- | --- | --- |
 | `dev` | `dev` | 8086 | No desplegado |
 | `test` | `test` | 8087 | No desplegado |
 | `stage` | `stage` | 8089 | No desplegado |
 | `prod` | `main` | 8088 | Desplegado |
 
-La API de producción está disponible en http://2.25.123.13:8088/swagger-ui/index.html. PostgreSQL permanece en una red Docker privada.
+La dirección de producción es http://2.25.123.13:8088/swagger-ui/index.html. PostgreSQL permanece dentro de una red Docker privada.
 
-## Flujo de publicación
+## Flujo automático
 
-1. Los cambios en `main` activan la compilación y las pruebas de GitHub Actions.
-2. Al finalizar correctamente la validación, se publica en GHCR una imagen etiquetada con la revisión del código.
-3. El workflow de producción transfiere la configuración al VPS e inicia el despliegue.
-4. Terraform administra la red, el volumen y PostgreSQL. Docker Compose levanta la API.
-5. Se comprueba la salud de la aplicación y la disponibilidad de las rutas HTTP de lectura y Swagger.
+```text
+Push / integración en main
+          |
+          v
+Validación backend (Java 21, JUnit, Testcontainers, Docker y Terraform)
+          |
+          v
+Publicar imagen Docker (GHCR, etiqueta con revisión del código)
+          |
+          v
+Desplegar producción (SSH, Terraform y Docker Compose)
+          |
+          v
+Comprobar salud, OpenAPI, Swagger y consulta de franquicias
+```
 
-El código de la aplicación se empaqueta mediante `Dockerfile.runtime`. Para desarrollo local se utiliza el `Dockerfile` multietapa que compila el proyecto desde sus fuentes.
+El workflow de publicación conserva la referencia exacta de la revisión validada. En `main` genera también la etiqueta `latest`, aunque el despliegue usa la etiqueta de la revisión concreta y no `latest`.
 
-Los archivos `docker-compose.dev.yml`, `docker-compose.test.yml` y `docker-compose.stage.yml` permiten configurar cada perfil, pero su existencia no implica que esos ambientes estén desplegados.
+Los cambios en `dev`, `test` y `stage` pueden generar imágenes en GHCR si pasan CI, pero **no activan el despliegue automático del VPS**. Las ramas `feature/*` y `bugfix/*` ejecutan validaciones, sin desplegar producción.
 
-## Configuración en GitHub
+## Workflows y scripts
 
-En `Settings → Environments`, el ambiente `produccion` debe permitir despliegues desde `main` y contener los siguientes secretos:
+### GitHub Actions
 
-| Secreto | Uso |
+| Archivo | Ejecución | Función |
+| --- | --- | --- |
+| [`ci.yml`](../.github/workflows/ci.yml) | Push a ramas de desarrollo y permanentes, o ejecución manual | Ejecuta `mvn clean verify`, construye `Dockerfile.runtime`, inicia cada perfil en contenedores temporales con PostgreSQL y valida Terraform. |
+| [`validar-ejecucion-local.yml`](../.github/workflows/validar-ejecucion-local.yml) | Push a `main` y rama de trabajo de la guía, o manual | Prueba los dos métodos de instalación desde cero: Docker Compose completo y API con Maven. Verifica salud, Swagger, lectura y creación de franquicias. |
+| [`publicar-imagen.yml`](../.github/workflows/publicar-imagen.yml) | Después de `Validación backend` exitosa o manualmente | Publica en GHCR. Solo una validación exitosa originada en `main` activa automáticamente el despliegue productivo. |
+| [`_desplegar-ambiente.yml`](../.github/workflows/_desplegar-ambiente.yml) | Workflow reutilizable | Verifica secretos, prepara SSH, empaqueta los archivos del ambiente, crea su `.env` temporalmente desde secretos, ejecuta Terraform/Docker en el VPS y realiza comprobaciones HTTP. |
+| [`desplegar-dev.yml`](../.github/workflows/desplegar-dev.yml) | Manual desde `dev` | Preparado para desplegar el perfil de desarrollo, si se habilita su entorno. |
+| [`desplegar-test.yml`](../.github/workflows/desplegar-test.yml) | Manual desde `test` | Preparado para desplegar el perfil de pruebas. |
+| [`desplegar-stage.yml`](../.github/workflows/desplegar-stage.yml) | Manual desde `stage` | Preparado para desplegar el perfil de preproducción. |
+| [`desplegar-produccion.yml`](../.github/workflows/desplegar-produccion.yml) | Manual desde `main` | Permite ejecutar nuevamente el despliegue de producción. |
+
+Los workflows manuales de desarrollo, pruebas y preproducción forman parte de la configuración, **pero no se han ejecutado para desplegar dichos ambientes en el VPS de esta entrega**. La ejecución manual de publicación de imagen tampoco inicia automáticamente producción.
+
+### Scripts
+
+| Archivo | Función |
+| --- | --- |
+| [`scripts/validar-contenedor.sh`](../scripts/validar-contenedor.sh) | Crea contenedores temporales de API y PostgreSQL por perfil, prueba R2DBC/Flyway, crea y consulta una franquicia, reinicia la API para comprobar persistencia y limpia los recursos. |
+| [`scripts/desplegar-vps.sh`](../scripts/desplegar-vps.sh) | Valida el ambiente y las variables del VPS, inicializa Terraform, revisa el plan antes de aplicarlo, levanta PostgreSQL, descarga la imagen GHCR y ejecuta Docker Compose. Comprueba el contenedor y el endpoint de salud. |
+| [`scripts/iniciar-local-maven.sh`](../scripts/iniciar-local-maven.sh) | Inicia PostgreSQL en Docker y ejecuta Spring Boot con Maven en Linux/macOS, sin requerir `.env`. |
+| [`scripts/iniciar-local-maven.ps1`](../scripts/iniciar-local-maven.ps1) | Hace el mismo arranque local desde Windows PowerShell. |
+
+### Docker y Terraform
+
+- [`Dockerfile`](../Dockerfile): construcción multietapa utilizada por `docker compose up -d --build` en equipos locales.
+- [`Dockerfile.runtime`](../Dockerfile.runtime): empaqueta el JAR previamente compilado por el CI y evita volver a descargar dependencias al publicar.
+- [`docker-compose.yml`](../docker-compose.yml): API y PostgreSQL para uso local; expone solo `127.0.0.1:8088` y `127.0.0.1:5434`. Incluye credenciales predeterminadas de demostración.
+- `docker-compose.dev.yml`, `docker-compose.test.yml`, `docker-compose.stage.yml` y `docker-compose.prod.yml`: configuración de perfiles y conexión a los recursos aislados del ambiente correspondiente.
+- [`infra/terraform/main.tf`](../infra/terraform/main.tf): administra red, volumen y contenedor PostgreSQL; no crea el VPS. Los estados se guardan por separado en cada directorio del servidor.
+
+## Configuración de producción en GitHub
+
+En `Settings → Environments`, el ambiente `produccion` utiliza la rama `main`. Configurar estos secretos:
+
+| Secreto | Para qué se utiliza |
 | --- | --- |
 | `VPS_HOST` | Dirección del servidor |
-| `VPS_USER` | Usuario SSH |
-| `VPS_SSH_KEY` | Clave privada SSH |
-| `VPS_KNOWN_HOSTS` | Clave pública de host verificada |
-| `DB_PASSWORD` | Contraseña de PostgreSQL |
+| `VPS_USER` | Usuario autorizado para SSH |
+| `VPS_SSH_KEY` | Clave privada de acceso SSH |
+| `VPS_KNOWN_HOSTS` | Firma del host, verificada previamente |
+| `DB_PASSWORD` | Contraseña propia de PostgreSQL de producción |
 
-Si GHCR requiere autenticación privada, se configuran también `GHCR_USUARIO` y `GHCR_LEER_PAQUETE`. No guardar credenciales en el repositorio.
+Cuando el paquete de GHCR no es público, se pueden configurar `GHCR_USUARIO` y `GHCR_LEER_PAQUETE`. La variable de entorno `VPS_PUBLIC_HOST` permite cambiar la dirección que utiliza el CI para las comprobaciones externas.
 
-La variable opcional `VPS_PUBLIC_HOST` permite definir la dirección que utiliza el workflow para probar los endpoints públicos.
+**La contraseña local predeterminada de `docker-compose.yml` no se usa en producción.** El despliegue del VPS recibe sus credenciales desde los secretos del entorno y genera allí el archivo `.env` con permisos restringidos. No guardar claves SSH, estados de Terraform, contraseñas reales ni `.env` de producción en Git.
 
-## Producción en el VPS
+## Procedimiento en el VPS
 
-Ruta de instalación: `/opt/gestor-franquicias/prod`.
+El proyecto se instala en `/opt/gestor-franquicias/prod`. El despliegue sigue estos pasos:
 
-Verificar en el servidor:
+1. GitHub Actions comprueba la conexión SSH y envía únicamente los archivos necesarios.
+2. `scripts/desplegar-vps.sh` valida el perfil `prod`, el puerto 8088 y la imagen exacta publicada.
+3. Terraform crea o actualiza los recursos de PostgreSQL. El script rechaza planes que intenten eliminar el volumen de datos.
+4. Docker Compose inicia la API usando la imagen descargada desde GHCR.
+5. El servidor comprueba `/actuator/health`, la red Docker y la imagen activa.
+6. GitHub Actions verifica desde Internet `/actuator/health`, `/v3/api-docs`, Swagger y `GET /api/v1/franquicias`.
+
+Para consultar el estado directamente en el VPS:
 
 ```bash
 docker ps --filter name=gestor-franquicias-prod
 curl -fsS http://127.0.0.1:8088/actuator/health
 ```
 
-Swagger y OpenAPI:
+La API productiva escucha en `0.0.0.0:8088`. El despliegue abre el puerto TCP 8088 en UFW si está activo. Si el proveedor controla un firewall adicional, debe permitir ese puerto. PostgreSQL no publica su puerto a Internet.
 
-```text
-http://2.25.123.13:8088/swagger-ui/index.html
-http://2.25.123.13:8088/v3/api-docs
+**Precaución:** la API pública utiliza HTTP y los endpoints de escritura no exigen autenticación. Se recomienda usar únicamente datos ficticios y añadir HTTPS y controles de acceso antes de trabajar con datos reales.
+
+## Desarrollo local
+
+No hace falta configurar secretos, Terraform ni acceso SSH para ejecutar el proyecto localmente.
+
+```bash
+docker compose up -d --build
 ```
 
-La API escucha en `0.0.0.0:8088` y el puerto está permitido en UFW cuando se encuentra activo. Si el proveedor administra un firewall adicional, también debe permitir TCP 8088.
+Este comando usa credenciales de demostración definidas en `docker-compose.yml` si no existe `.env`.
 
-Terraform conserva su estado por ambiente y el despliegue no ejecuta `terraform destroy`. El volumen PostgreSQL no debe eliminarse al actualizar la aplicación.
+Para iniciar el backend mediante Maven y dejar PostgreSQL en Docker:
 
-## Ejecución local
+- Windows PowerShell: `.\scripts\iniciar-local-maven.ps1`
+- Linux/macOS: `bash scripts/iniciar-local-maven.sh`
 
-No se necesita acceso al VPS ni credenciales de GitHub para trabajar en el equipo de desarrollo. El procedimiento con **Docker Compose** y con **Maven más PostgreSQL en Docker** está descrito en el [README](../README.md#ejecutar-localmente).
-
-**Seguridad:** el acceso público actual utiliza HTTP y no exige autenticación para modificar información. Usar solo datos de demostración. Para datos reales se requiere HTTPS y control de acceso.
+Los requisitos, las comprobaciones y la solución de problemas se encuentran en el [README principal](../README.md#ejecutar-localmente). Las solicitudes de ejemplo están en [Ejemplos de la API](EJEMPLOS_API.md).
