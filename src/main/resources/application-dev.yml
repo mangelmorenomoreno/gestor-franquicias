@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: gestor-franquicias-desarrollo
+logging:
+  level:
+    root: INFO
+management:
+  endpoint:
+    health:
+      show-details: never
+springdoc:
+  swagger-ui:
+    enabled: true
