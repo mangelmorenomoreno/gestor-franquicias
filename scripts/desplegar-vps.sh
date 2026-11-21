@@ -167,6 +167,11 @@ fi
 # Validar que la API está unida exclusivamente a la red esperada.
 contenedor_api="$(docker compose -p "gestor-franquicias-$ambiente" -f "$compose" ps -q api)"
 redes_api="$(docker inspect -f '{{range $nombre, $_ := .NetworkSettings.Networks}}{{println $nombre}}{{end}}' "$contenedor_api")"
+imagen_actual="$(docker inspect -f '{{.Config.Image}}' "$contenedor_api")"
+if [[ "$imagen_actual" != "$IMAGEN_BACKEND" ]]; then
+  echo "La API desplegada no corresponde al commit validado: $imagen_actual" >&2
+  exit 1
+fi
 if [[ "$redes_api" != "$red" ]]; then
   echo "La API está conectada a una red inesperada: $redes_api" >&2
   exit 1
