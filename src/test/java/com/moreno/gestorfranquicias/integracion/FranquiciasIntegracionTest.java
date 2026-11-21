@@ -187,6 +187,73 @@ class FranquiciasIntegracionTest {
                 .path("nombre").asText()).isEqualTo("Producto Actualizado");
     }
 
+    @Test
+    void consultasGlobalesIncluyenFranquiciasSucursalesYProductosDeDistintosNegocios() throws Exception {
+        long franquiciaUno = crear("/api/v1/franquicias",
+                Map.of("nombre", "Global Uno"), "idFranquicia");
+        long franquiciaDos = crear("/api/v1/franquicias",
+                Map.of("nombre", "Global Dos"), "idFranquicia");
+        long sucursalUno = crear("/api/v1/franquicias/" + franquiciaUno + "/sucursales",
+                Map.of("nombre", "Global Norte"), "idSucursal");
+        long sucursalDos = crear("/api/v1/franquicias/" + franquiciaDos + "/sucursales",
+                Map.of("nombre", "Global Sur"), "idSucursal");
+        long productoUno = crear("/api/v1/sucursales/" + sucursalUno + "/productos",
+                Map.of("nombre", "Global Agua", "stock", 10), "idProducto");
+        long productoDos = crear("/api/v1/sucursales/" + sucursalDos + "/productos",
+                Map.of("nombre", "Global Jugo", "stock", 25), "idProducto");
+
+        JsonNode franquicias = consultar("/api/v1/franquicias");
+        assertThat(franquicias.path("success").asBoolean()).isTrue();
+        assertThat(buscarPorId(franquicias.path("data"), "idFranquicia", franquiciaUno)
+                .path("nombre").asText()).isEqualTo("Global Uno");
+        assertThat(buscarPorId(franquicias.path("data"), "idFranquicia", franquiciaDos)
+                .path("nombre").asText()).isEqualTo("Global Dos");
+
+        JsonNode sucursales = consultar("/api/v1/sucursales");
+        assertThat(sucursales.path("success").asBoolean()).isTrue();
+        assertThat(buscarPorId(sucursales.path("data"), "idSucursal", sucursalUno)
+                .path("idFranquicia").asLong()).isEqualTo(franquiciaUno);
+        assertThat(buscarPorId(sucursales.path("data"), "idSucursal", sucursalDos)
+                .path("idFranquicia").asLong()).isEqualTo(franquiciaDos);
+        validarOrdenAscendente(sucursales.path("data"), "idSucursal");
+
+        JsonNode productos = consultar("/api/v1/productos");
+        assertThat(productos.path("success").asBoolean()).isTrue();
+        JsonNode agua = buscarPorId(productos.path("data"), "idProducto", productoUno);
+        JsonNode jugo = buscarPorId(productos.path("data"), "idProducto", productoDos);
+        assertThat(agua.path("idSucursal").asLong()).isEqualTo(sucursalUno);
+        assertThat(agua.path("stock").asInt()).isEqualTo(10);
+        assertThat(jugo.path("idSucursal").asLong()).isEqualTo(sucursalDos);
+        assertThat(jugo.path("stock").asInt()).isEqualTo(25);
+        validarOrdenAscendente(productos.path("data"), "idProducto");
+
+        assertThat(buscarPorId(consultar("/api/v1/franquicias/" + franquiciaUno + "/sucursales")
+                .path("data"), "idSucursal", sucursalUno).path("nombre").asText())
+                .isEqualTo("Global Norte");
+        assertThat(buscarPorId(consultar("/api/v1/sucursales/" + sucursalDos + "/productos")
+                .path("data"), "idProducto", productoDos).path("nombre").asText())
+                .isEqualTo("Global Jugo");
+    }
+
+    private JsonNode buscarPorId(JsonNode registros, String campo, long identificador) {
+        assertThat(registros.isArray()).isTrue();
+        for (JsonNode registro : registros) {
+            if (registro.path(campo).asLong() == identificador) {
+                return registro;
+            }
+        }
+        throw new AssertionError("No aparece " + campo + "=" + identificador + " en la consulta");
+    }
+
+    private void validarOrdenAscendente(JsonNode registros, String campo) {
+        long anterior = 0;
+        for (JsonNode registro : registros) {
+            long actual = registro.path(campo).asLong();
+            assertThat(actual).isGreaterThan(anterior);
+            anterior = actual;
+        }
+    }
+
     private long crear(String ruta, Map<String, ?> datos, String nombreIdentificador) throws Exception {
         String respuesta = api.post().uri(ruta).bodyValue(datos)
                 .exchange().expectStatus().isCreated()

@@ -39,6 +39,10 @@ public class SucursalService implements ISucursalService {
                 .map(sucursalMapper::convertir);
     }
 
+    public Flux<SucursalListadoResponse> listar() {
+        return sucursales.listar().map(sucursalMapper::convertirListado);
+    }
+
     public Mono<SucursalDetalleResponse> consultar(Long idSucursal) {
         return buscarSucursal(idSucursal)
                 .flatMap(sucursal -> productos.listarPorSucursal(idSucursal)

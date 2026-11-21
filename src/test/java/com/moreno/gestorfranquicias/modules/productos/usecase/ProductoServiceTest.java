@@ -7,11 +7,21 @@ import com.moreno.gestorfranquicias.modules.sucursales.dataproviders.ISucursalDa
 import com.moreno.gestorfranquicias.infrastructure.exception.ExcepcionNegocio;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class ProductoServiceTest {
+    @Test
+    void consultarTodosLosProductosDevuelveVacioSiNoHayRegistros() {
+        var productos = mock(IProductoDataProvider.class);
+        when(productos.listar()).thenReturn(Flux.empty());
+        var servicio = new ProductoService(productos, mock(ISucursalDataProvider.class), new ProductoMapper());
+        StepVerifier.create(servicio.listar()).verifyComplete();
+        verify(productos).listar();
+    }
+
     @Test
     void noPermiteConsultarProductoDeOtraSucursal() {
         var productos = mock(IProductoDataProvider.class);

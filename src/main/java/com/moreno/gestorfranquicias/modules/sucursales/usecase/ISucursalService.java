@@ -7,6 +7,7 @@ public interface ISucursalService {
 
 Mono<SucursalResumenResponse> crear(Long idFranquicia, CrearSucursalRequest datos);
 Mono<SucursalDetalleResponse> consultar(Long idSucursal);
+Flux<SucursalListadoResponse> listar();
 Flux<ProductoResponse> listarProductos(Long idSucursal);
 Mono<SucursalResumenResponse> cambiarNombre(Long idSucursal, ActualizarNombreRequest datos);
 }

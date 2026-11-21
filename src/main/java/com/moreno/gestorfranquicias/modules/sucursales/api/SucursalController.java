@@ -28,6 +28,13 @@ public class SucursalController {
                         .body(ApiResponse.creado("Sucursal creada correctamente.", respuesta)));
     }
 
+    @GetMapping("/sucursales")
+    @Operation(summary = "Consultar todas las sucursales", description = "Lista las sucursales de todas las franquicias e identifica la franquicia a la que pertenece cada una")
+    public Mono<ResponseEntity<ApiResponse<List<SucursalListadoResponse>>>> listar() {
+        return servicio.listar().collectList()
+                .map(registros -> ResponseEntity.ok(ApiResponse.correcto("Sucursales consultadas correctamente.", registros)));
+    }
+
     @GetMapping("/sucursales/{idSucursal}")
     @Operation(summary = "Consultar una sucursal con todos sus productos")
     public Mono<ResponseEntity<ApiResponse<SucursalDetalleResponse>>> consultar(@PathVariable Long idSucursal) {
