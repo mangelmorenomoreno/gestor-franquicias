@@ -83,7 +83,6 @@ jobs:
             "$remote:.gestor-franquicias-bootstrap/entrega.tar.gz"
 
       - name: Autenticar GHCR en el VPS si la imagen es privada
-        if: ${{ env.GHCR_LEER_PAQUETE != '' }}
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -91,6 +90,10 @@ jobs:
           GHCR_LEER_PAQUETE: ${{ secrets.GHCR_LEER_PAQUETE }}
         run: |
           set -euo pipefail
+          if [[ -z "$GHCR_LEER_PAQUETE" ]]; then
+            echo "La imagen se descargará sin autenticación de GHCR."
+            exit 0
+          fi
           [[ "$GHCR_USUARIO" =~ ^[A-Za-z0-9-]+$ ]]
           printf '%s' "$GHCR_LEER_PAQUETE" \
             | ssh -o StrictHostKeyChecking=yes -o BatchMode=yes \
@@ -109,6 +112,20 @@ jobs:
           archivo="$HOME/.gestor-franquicias-bootstrap/entrega.tar.gz"
           trap 'rm -f "$archivo"' EXIT
           test -f "$archivo"
+
+          # La contraseña de una base ya inicializada no puede rotarse con POSTGRES_PASSWORD.
+          if [[ -f /opt/gestor-franquicias/.env ]]; then
+              nueva="$(tar -xOzf "$archivo" ./.env | sed -n 's/^DB_PASSWORD=//p')"
+              if [[ "$(id -u)" -eq 0 ]]; then
+                  existente="$(sed -n 's/^DB_PASSWORD=//p' /opt/gestor-franquicias/.env)"
+              else
+                  existente="$(sudo -n sed -n 's/^DB_PASSWORD=//p' /opt/gestor-franquicias/.env)"
+              fi
+              if [[ "$nueva" != "$existente" ]]; then
+                  echo "La contraseña de PostgreSQL difiere de la existente. Deteniendo despliegue." >&2
+                  exit 1
+              fi
+          fi
 
           if [[ "$(id -u)" -eq 0 ]]; then
               install -d -m 750 /opt/gestor-franquicias
