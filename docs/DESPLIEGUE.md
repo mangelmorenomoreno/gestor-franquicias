@@ -1,10 +1,10 @@
 # Despliegue por ambientes mediante GitHub Actions
 
-La API Gestor de Franquicias dispone de cuatro ambientes aislados para probar cambios sin modificar la base de datos de producción. Todos utilizan Java 21, Spring Boot, R2DBC, Flyway, Docker y Terraform. Los ambientes se prueban por separado en GitHub Actions, pero **solo producción se instala en el VPS**. Cada PR fusionado a `main` inicia CI; si este pasa, se publica la imagen Docker del commit validado y se despliega `prod` automáticamente. Abrir un PR no despliega.
+La API Gestor de Franquicias dispone de cuatro ambientes aislados para probar cambios sin modificar la base de datos de producción. Todos utilizan Java 21, Spring Boot, R2DBC, Flyway, Docker y Terraform. Los ambientes se prueban por separado en GitHub Actions, pero **solo producción se instala en el VPS**. Los cambios integrados en `main` disparan CI; cuando pasa, se publica en GHCR la imagen del commit validado y se despliega `prod` automáticamente. Abrir un PR no despliega. **Hay evidencia de una ejecución exitosa:** [#44859340375](https://github.com/mangelmorenomoreno/gestor-franquicias/actions/runs/44859340375), commit `33001291d0e031838af99171d5882cd793c29d87`.
 
 ## Ambientes, conexiones y perfiles
 
-| Ambiente | Rama | Entorno GitHub | Perfil Spring | Puerto local VPS | Directorio del VPS |
+| Ambiente | Rama | Entorno GitHub | Perfil Spring | Puerto configurado | Directorio previsto en VPS |
 |---|---|---|---|---|---|
 | Desarrollo | `dev` | `desarrollo` | `dev` | 8086 | `/opt/gestor-franquicias/dev` |
 | Pruebas | `test` | `pruebas` | `test` | 8087 | `/opt/gestor-franquicias/test` |
@@ -13,7 +13,7 @@ La API Gestor de Franquicias dispone de cuatro ambientes aislados para probar ca
 
 **En el VPS únicamente se despliega `prod`.** Los perfiles de `dev`, `test` y `stage` siguen probándose en CI y no se instalan en el servidor en este flujo.
 
-Cada ambiente conserva su propio estado Terraform, red Docker, contenedor PostgreSQL 16, volumen persistente y contenedor Spring Boot. Todos pueden llamar a su base `gestor_franquicias` porque son instancias independientes; la dirección `base-datos` se resuelve únicamente dentro de la red correspondiente.
+Cada perfil está preparado para conservar su propio estado Terraform, red Docker, contenedor PostgreSQL 16, volumen persistente y contenedor Spring Boot; en el VPS de esta entrega únicamente se instala producción. Todos pueden llamar a su base `gestor_franquicias` porque son instancias independientes; la dirección `base-datos` se resuelve únicamente dentro de la red correspondiente.
 
 | Perfil | Red privada | Contenedor PostgreSQL | Volumen de datos |
 |---|---|---|---|
@@ -71,7 +71,7 @@ No subir contraseñas, llaves SSH privadas ni archivos `.env` a Git ni compartir
 2. Crear un PR a `main`, revisarlo y fusionarlo. El push del merge activa el CI. Ante un error, no se publicará ni desplegará.
 3. El workflow `Publicar imagen Docker` publica el SHA validado en GHCR y, si corresponde a `main`, llama al despliegue de producción.
 4. Terraform inicializa la red, volumen y PostgreSQL exclusivos de `prod`; la API se enlaza a `0.0.0.0:8088`, para aceptar conexiones desde la IP pública del VPS.
-5. El despliegue verifica `/actuator/health`, conexión R2DBC y migraciones Flyway.
+5. El despliegue comprueba `/actuator/health`, conexión R2DBC y migraciones Flyway; desde GitHub Actions consulta además la IP pública para verificar `/actuator/health`, `/v3/api-docs`, `/swagger-ui/index.html` y `GET /api/v1/franquicias`. También valida que el contenedor esté ejecutando la imagen etiquetada con el commit verificado.
 
 Para relanzar manualmente sin nuevo commit: `Actions → Desplegar prod en el VPS → Run workflow` (rama `main`). Desde el VPS:
 
@@ -90,8 +90,27 @@ Terraform se instalará desde el repositorio oficial firmado si no está disponi
 
 Los perfiles `dev`, `test` y `stage` mantienen `127.0.0.1`. Solo `prod` publica TCP `8088` en todas las interfaces (`0.0.0.0`) y abre ese puerto en UFW cuando está activo. En un proveedor con firewall externo, permitir adicionalmente TCP `8088` de entrada. PostgreSQL continúa exclusivamente en la red Docker privada; no se publican puertos de la base de datos ni se modifican contenedores de otras aplicaciones.
 
-**Acceso público:** `http://IP_PUBLICA_DEL_VPS:8088/swagger-ui.html`, especificación en `http://IP_PUBLICA_DEL_VPS:8088/v3/api-docs` y comprobación `http://IP_PUBLICA_DEL_VPS:8088/actuator/health`. La IP que muestra Docker (`0.0.0.0`) indica escucha en todas las interfaces, no es una dirección para el navegador. Verificar desde una red externa, porque el chequeo local del VPS no demuestra conectividad externa.
+**Acceso público comprobado en la ejecución #44859340375:** [Swagger UI](http://2.25.123.13:8088/swagger-ui/index.html), [OpenAPI](http://2.25.123.13:8088/v3/api-docs), [salud](http://2.25.123.13:8088/actuator/health) y [GET franquicias](http://2.25.123.13:8088/api/v1/franquicias). La variable opcional `VPS_PUBLIC_HOST` (GitHub Actions → Variables) reemplaza la IP de la prueba externa si se migra el servidor; su valor predeterminado en el workflow es `2.25.123.13`. La IP que muestra Docker (`0.0.0.0`) indica escucha en todas las interfaces, no es una dirección para el navegador. Verificar desde una red externa, porque el chequeo local del VPS no demuestra conectividad externa.
 
 **Advertencia:** esta prueba técnica no incorpora autenticación en los endpoints de escritura, por lo que abrir `8088` permite que cualquiera en Internet consulte, cree, modifique o elimine datos expuestos por la API. No almacenar datos reales/sensibles. Para un uso prolongado se recomienda HTTPS con proxy inverso, autenticación y limitación de peticiones. HTTP directo por IP se habilita únicamente a petición para la evaluación.
 
-**Registro:** el intento manual `#44855855301` alcanzó el VPS y falló al instalar Terraform porque `apt` no podía leer el keyring de HashiCorp. El arreglo y el despliegue automático solo se considerarán verificados después de una nueva ejecución exitosa. No se asume que PostgreSQL o la API estén instalados hasta comprobarlo.
+**Historial de resolución:** el intento `#44855855301` falló por permisos del keyring de HashiCorp; posteriormente se corrigió la instalación. El despliegue automatizado [#44859340375](https://github.com/mangelmorenomoreno/gestor-franquicias/actions/runs/44859340375) terminó con `success` en publicación, despliegue y pruebas HTTP desde Internet el 20 de noviembre de 2026, hora de Colombia, con imagen `ghcr.io/mangelmorenomoreno/gestor-franquicias:33001291d0e031838af99171d5882cd793c29d87`. No extrapolar ese resultado a commits posteriores sin sus propios registros.
+
+
+## Cómo reproducir la aplicación sin acceso al VPS
+
+La entrega puede evaluarse íntegramente en cualquier equipo con Git y Docker Compose:
+
+~~~bash
+git clone https://github.com/mangelmorenomoreno/gestor-franquicias.git
+cd gestor-franquicias
+cp .env.example .env
+# Cambiar DB_PASSWORD por una contraseña local privada
+docker compose up -d --build
+curl -fsS http://localhost:8088/actuator/health
+curl -fsS http://localhost:8088/api/v1/franquicias
+~~~
+
+En Windows PowerShell utilice `Copy-Item .env.example .env` en lugar de `cp`. Abra `http://localhost:8088/swagger-ui/index.html` para probar los endpoints. PostgreSQL local escucha en `127.0.0.1:5434`; el Compose local no depende de Terraform ni de los secretos SSH de GitHub. Para ejecutar la API con Java 21 y Maven, utilizar la alternativa documentada en [README, apartado 8](../README.md#8-ejecución-local).
+
+**Limitación relevante:** el acceso HTTP público es para demostración, no una configuración de producción endurecida. La API carece de autenticación sobre endpoints de escritura. No introducir datos sensibles; habilitar HTTPS y control de acceso antes de almacenar información real.
