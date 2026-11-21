@@ -179,10 +179,10 @@ jobs:
         if: ${{ inputs.ambiente == 'prod' }}
         timeout-minutes: 6
         env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PUBLIC_HOST: ${{ vars.VPS_PUBLIC_HOST || '2.25.123.13' }}
         run: |
           set -euo pipefail
-          base="http://${VPS_HOST}:8088"
+          base="http://${VPS_PUBLIC_HOST}:8088"
           # El healthcheck del VPS no basta: este runner verifica desde Internet.
           disponible=false
           for intento in $(seq 1 24); do
@@ -199,8 +199,11 @@ jobs:
           fi
           curl -fsSL --connect-timeout 4 --max-time 15 "$base/v3/api-docs" \
             | python3 -c 'import json,sys; assert "/api/v1/franquicias" in json.load(sys.stdin)["paths"]'
-          curl -fsSL --connect-timeout 4 --max-time 15 -o /dev/null "$base/swagger-ui.html"
-          echo "API, OpenAPI y Swagger accesibles desde Internet en producción."
+          curl -fsSL --connect-timeout 4 --max-time 15 -o /dev/null "$base/swagger-ui/index.html"
+          # Consulta real de lectura a la API contra PostgreSQL.
+          curl -fsSL --connect-timeout 4 --max-time 15 "$base/api/v1/franquicias" \
+            | python3 -c 'import json,sys; assert json.load(sys.stdin)["success"] is True'
+          echo "API, persistencia, OpenAPI y Swagger accesibles desde Internet en producción."
 
       - name: Eliminar autenticación GHCR temporal
         if: ${{ always() }}
