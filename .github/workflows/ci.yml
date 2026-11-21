@@ -52,6 +52,15 @@ jobs:
           bash -n scripts/validar-contenedor.sh
           # Evitar regresión: apt debe leer la clave pública incluso con umask 077.
           grep -Fq 'chmod 0644 "$keyring"' scripts/desplegar-vps.sh
+          # Evitar la regresión: el keyring preexistente debe repararse antes de apt-get update.
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path("scripts/desplegar-vps.sh").read_text()
+          inicio = script.index("if ! command -v terraform")
+          primera_actualizacion = script.index("  apt-get update", inicio)
+          reparacion = script.index("    chmod 0644 \"$keyring\"", inicio)
+          assert reparacion < primera_actualizacion
+          PY
           # Evitar desplegar al abrir PR o desde ramas distintas de main.
           grep -Fq 'needs: publicar' .github/workflows/publicar-imagen.yml
           grep -Fq "github.event.workflow_run.head_branch == 'main'" .github/workflows/publicar-imagen.yml
