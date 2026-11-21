@@ -179,6 +179,8 @@ Todos los endpoints utilizarán el prefijo `/api/v1`. Además de los criterios o
 | Método | Ruta | Descripción |
 | --- | --- | --- |
 | GET | `/franquicias` | Consultar todas las franquicias |
+| GET | `/sucursales` | Consultar todas las sucursales de todas las franquicias, incluyendo `idFranquicia` |
+| GET | `/productos` | Consultar todos los productos de todas las sucursales, incluyendo `idSucursal` |
 | GET | `/franquicias/{idFranquicia}` | Consultar una franquicia con todas sus sucursales |
 | GET | `/franquicias/{idFranquicia}/sucursales` | Consultar todas las sucursales de la franquicia |
 | GET | `/sucursales/{idSucursal}` | Consultar una sucursal con todos sus productos |
@@ -227,7 +229,12 @@ GET /api/v1/franquicias/1/sucursales
 
 Esta consulta devolverá una lista. Si la franquicia existe, pero no tiene sucursales, devolverá `[]`. Si la franquicia no existe, responderá `404`.
 
-Para consultar todas las franquicias sin seleccionar una en particular usaré `GET /api/v1/franquicias`.
+Las consultas globales, disponibles también desde Swagger, son:
+- `GET /api/v1/franquicias`: todas las franquicias.
+- `GET /api/v1/sucursales`: todas las sucursales, indicando su `idFranquicia`.
+- `GET /api/v1/productos`: todos los productos, indicando su `idSucursal`.
+
+Las tres devuelven `200 OK` y `data: []` si no existen registros, ordenadas de manera ascendente por identificador. La colección global no sustituye las consultas filtradas existentes.
 
 ### Consultar una sucursal sin indicar producto
 
