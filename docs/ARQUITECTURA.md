@@ -46,7 +46,7 @@ El workflow de validación está configurado para ejecutarse con pushes a las ra
 
 ## Infraestructura
 
-Docker Compose permite iniciar la API y PostgreSQL localmente. Terraform define recursos propios del proyecto en el VPS: contenedor de PostgreSQL, volumen de datos y red Docker.
+Docker Compose permite iniciar la API y PostgreSQL localmente. Terraform define recursos propios del proyecto en el VPS: contenedor de PostgreSQL, volumen de datos y red Docker. **Solo el perfil `prod` de `main` fue desplegado en el VPS (`8088`)**. Los perfiles `dev` (`8086`), `test` (`8087`) y `stage` (`8089`) poseen puertos reservados en la configuración, pero se validan en CI y **no son ambientes publicados en el servidor**.
 
 El estado de Terraform puede contener información sensible, por lo que debe mantenerse fuera de Git. El despliegue de producción ya se verificó en el VPS: [ejecución #44859340375](https://github.com/mangelmorenomoreno/gestor-franquicias/actions/runs/44859340375), imagen de commit `33001291d0e031838af99171d5882cd793c29d87`.
 
