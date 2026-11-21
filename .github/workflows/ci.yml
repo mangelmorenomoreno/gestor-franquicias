@@ -2,7 +2,7 @@ name: Validación backend
 
 on:
   push:
-    branches: [dev, test, stage, main, feature/despliegue-vps-automatizado]
+    branches: [dev, test, stage, main, feature/configuracion-ambientes]
   workflow_dispatch:
 
 permissions:
@@ -39,13 +39,21 @@ jobs:
       - name: Construir imagen Docker sin descargar dependencias nuevamente
         run: docker build -f Dockerfile.runtime -t gestor-franquicias:validacion .
 
-      - name: Validar arranque real de la imagen y persistencia
-        run: bash scripts/validar-contenedor.sh
+      - name: Validar conexiones PostgreSQL y Flyway con cada perfil
+        run: |
+          for ambiente in dev test stage prod; do
+            echo "=== Comprobando perfil $ambiente con su propia base ==="
+            PERFIL="$ambiente" bash scripts/validar-contenedor.sh
+          done
 
       - name: Comprobar sintaxis del despliegue automatizado
         run: |
           bash -n scripts/desplegar-vps.sh
           bash -n scripts/validar-contenedor.sh
+          for ambiente in dev test stage prod; do
+            test -f "src/main/resources/application-$ambiente.yml"
+            test -f "docker-compose.$ambiente.yml"
+          done
 
       - name: Validar configuración de Docker Compose
         env:
@@ -54,7 +62,10 @@ jobs:
           IMAGEN_BACKEND: gestor-franquicias:validacion
         run: |
           docker compose -f docker-compose.yml config -q
-          docker compose -f docker-compose.prod.yml config -q
+          for ambiente in dev test stage prod; do
+            echo "Validando Docker Compose: $ambiente"
+            docker compose -f "docker-compose.$ambiente.yml" config -q
+          done
 
   infraestructura:
     name: Validar Terraform

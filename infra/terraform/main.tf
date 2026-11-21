@@ -1,9 +1,11 @@
+# Cada entorno utiliza su propia red, contenedor y volumen de PostgreSQL.
+# Terraform mantiene estados separados por directorio en el VPS.
 resource "docker_network" "franquicias" {
-  name = "gestor-franquicias-red"
+  name = "gestor-franquicias-${var.ambiente}-red"
 }
 
 resource "docker_volume" "datos_franquicias" {
-  name = "gestor-franquicias-datos"
+  name = "gestor-franquicias-${var.ambiente}-datos"
 }
 
 resource "docker_image" "postgres" {
@@ -12,7 +14,7 @@ resource "docker_image" "postgres" {
 }
 
 resource "docker_container" "postgres" {
-  name    = "gestor-franquicias-postgres"
+  name    = "gestor-franquicias-${var.ambiente}-postgres"
   image   = docker_image.postgres.image_id
   restart = "unless-stopped"
 

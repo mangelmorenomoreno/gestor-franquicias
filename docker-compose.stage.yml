@@ -1,0 +1,26 @@
+services:
+  api:
+    image: ${IMAGEN_BACKEND:?Configurar IMAGEN_BACKEND}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${IP_ESCUCHA_API:-127.0.0.1}:${PUERTO_API:-8089}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: "stage"
+      DB_URL: r2dbc:postgresql://base-datos:5432/gestor_franquicias
+      DB_MIGRATION_URL: jdbc:postgresql://base-datos:5432/gestor_franquicias
+      DB_USERNAME: ${DB_USERNAME:?Configurar DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Configurar DB_PASSWORD}
+    networks:
+      - red_franquicias
+networks:
+  red_franquicias:
+    external: true
+    name: gestor-franquicias-stage-red
