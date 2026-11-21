@@ -73,3 +73,17 @@ jobs:
             ${{ steps.etiquetas.outputs.latest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  desplegar_produccion:
+    name: Desplegar producción tras publicar imagen verificada
+    needs: publicar
+    # Un PR abierto o un CI de dev/test/stage NUNCA despliega.
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && needs.publicar.result == 'success' }}
+    uses: ./.github/workflows/_desplegar-ambiente.yml
+    with:
+      ambiente: prod
+      rama: main
+      puerto: 8088
+      entorno_github: produccion
+      revision: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit
