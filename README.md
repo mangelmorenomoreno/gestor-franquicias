@@ -13,7 +13,7 @@ API REST desarrollada como prueba técnica de Backend Developer. Administra fran
 
 **Inicio rápido local (Docker):** `git clone https://github.com/mangelmorenomoreno/gestor-franquicias.git` → `cd gestor-franquicias` → copiar `.env.example` a `.env` y establecer una contraseña local → `docker compose up -d --build` → abrir [Swagger local](http://localhost:8088/swagger-ui/index.html). No requiere instalar Java en el equipo: Docker compila y ejecuta el backend. Para instrucciones de Windows, Linux/macOS, Maven y resolución de problemas, consultar [`8. Ejecución local`](#8-ejecución-local).
 
-La aplicación utiliza Java 21, Spring Boot 3.5, WebFlux, R2DBC, PostgreSQL 16, Flyway, Docker, Terraform y GitHub Actions. Los perfiles lógicos `dev`, `test`, `stage` y `prod` se validan en CI; **solo `prod` se despliega en el VPS en el flujo automático**. Los demás perfiles no se exponen públicamente. Véase [Guía de despliegue](docs/DESPLIEGUE.md) y [Arquitectura](docs/ARQUITECTURA.md).
+La aplicación utiliza Java 21, Spring Boot 3.5, WebFlux, R2DBC, PostgreSQL 16, Flyway, Docker, Terraform y GitHub Actions. **Se desplegó únicamente `prod` desde `main` en el VPS, puerto público `8088`.** Los puertos `8086` (dev), `8087` (test) y `8089` (stage) aparecen en archivos de configuración para futuras instalaciones, pero **no representan servicios desplegados o accesibles en el VPS**: esos tres perfiles solo se validan en contenedores temporales de CI. La ejecución local con Docker Compose se realiza por separado en el equipo del evaluador y no instala ningún ambiente en el VPS. Véase [Guía de despliegue](docs/DESPLIEGUE.md) y [Arquitectura](docs/ARQUITECTURA.md).
 
 ## 1. Funcionalidades
 
