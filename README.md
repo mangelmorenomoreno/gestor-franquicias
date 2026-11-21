@@ -4,6 +4,8 @@ API REST para administrar franquicias, sucursales, productos y existencias por s
 
 Desarrollada con **Java 21, Spring Boot 3.5, WebFlux, R2DBC y PostgreSQL 16**. Incluye migraciones con Flyway, pruebas con JUnit/Testcontainers, Docker y Terraform.
 
+**Documentación:** [Arquitectura](docs/ARQUITECTURA.md) · [Despliegue y GitHub Actions](docs/DESPLIEGUE.md) · [Ejemplos de los 17 endpoints](docs/EJEMPLOS_API.md) · [Terraform](infra/terraform/README.md).
+
 ## Ejecutar localmente
 
 Hay dos formas de iniciar el proyecto. Ambas utilizan PostgreSQL en Docker; la diferencia es dónde se ejecuta Spring Boot.
@@ -19,21 +21,7 @@ git clone https://github.com/mangelmorenomoreno/gestor-franquicias.git
 cd gestor-franquicias
 ```
 
-Crear el archivo de variables:
-
-**Windows (PowerShell):**
-```powershell
-Copy-Item .env.example .env
-```
-
-**Linux/macOS:**
-```bash
-cp .env.example .env
-```
-
-Editar `.env` y establecer una contraseña local en `DB_PASSWORD`. Mantener el usuario `DB_USERNAME=gestor_franquicias`.
-
-Iniciar los contenedores:
+Iniciar los contenedores directamente, sin crear archivos de configuración:
 
 ```bash
 docker compose up -d --build
@@ -49,6 +37,8 @@ Consultar la API:
 
 Docker publica la API en el puerto **8088** y PostgreSQL en el **5434**, ambos solo en `127.0.0.1`.
 
+**Credenciales locales incluidas:** usuario `gestor_franquicias` y contraseña `franquicias_demo_local_2026`. Se usan únicamente para la base de desarrollo de Docker Compose, no para producción. No hace falta crear `.env`; si se desean credenciales diferentes, copiar `.env.example` a `.env` y editarlas antes de iniciar PostgreSQL por primera vez.
+
 Para revisar logs y detener los contenedores:
 
 ```bash
@@ -60,38 +50,25 @@ docker compose down
 
 ### Opción 2: Spring Boot con Maven y PostgreSQL en Docker
 
-Se necesita **JDK 21** y **Maven** además de Docker. Desde la raíz del repositorio, crear el archivo `.env` como se indica en la opción 1.
-
-Si la API de Docker Compose ya estaba iniciada, detenerla:
-
-```bash
-docker compose stop api
-docker compose up -d base-datos
-```
+Requiere **JDK 21, Maven y Docker**. Después de clonar el repositorio, ejecute el script de su sistema operativo. Inicia PostgreSQL en Docker, configura las variables locales y ejecuta Spring Boot con Maven.
 
 **Windows (PowerShell):**
+
 ```powershell
-$env:DB_URL = "r2dbc:postgresql://localhost:5434/gestor_franquicias"
-$env:DB_MIGRATION_URL = "jdbc:postgresql://localhost:5434/gestor_franquicias"
-$env:DB_USERNAME = "gestor_franquicias"
-$env:DB_PASSWORD = ((Get-Content .env | Where-Object { $_ -match '^DB_PASSWORD=' } | Select-Object -First 1) -split '=', 2)[1]
-mvn spring-boot:run
+.\scripts\iniciar-local-maven.ps1
 ```
 
 **Linux/macOS:**
-```bash
-set -a
-source .env
-set +a
 
-export DB_URL="r2dbc:postgresql://localhost:5434/gestor_franquicias"
-export DB_MIGRATION_URL="jdbc:postgresql://localhost:5434/gestor_franquicias"
-mvn spring-boot:run
+```bash
+bash scripts/iniciar-local-maven.sh
 ```
 
-La API arranca en **http://localhost:8080** y Swagger está en http://localhost:8080/swagger-ui/index.html.
+No se necesita `.env`. Si existe ese archivo con otras credenciales, el script las utiliza. En equipos que tengan restringidos los scripts de PowerShell puede utilizarse `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\iniciar-local-maven.ps1` desde la terminal local.
 
-La contraseña del contenedor PostgreSQL y la utilizada por Maven deben coincidir. Si el volumen ya fue inicializado con otra contraseña, cambiar el archivo `.env` no modifica la contraseña existente en PostgreSQL.
+La API queda en **http://localhost:8080** y Swagger en http://localhost:8080/swagger-ui/index.html. El script detiene la API del Compose si está activa, pero deja PostgreSQL y sus datos disponibles.
+
+Si se reutiliza un volumen creado con otra contraseña, hay que emplear la contraseña original o cambiarla desde PostgreSQL.
 
 ### Comprobar el funcionamiento
 
@@ -162,6 +139,117 @@ Content-Type: application/json
 
 Las respuestas utilizan los campos `code`, `message`, `success`, `data`, `errors` y `timestamp`. Swagger contiene los contratos completos.
 
+### Solicitudes y respuestas de ejemplo
+
+Las rutas llevan el prefijo `/api/v1`. Los IDs son ilustrativos y `timestamp` se genera en UTC para cada solicitud.
+
+**Crear franquicia**
+
+```http
+POST /api/v1/franquicias
+Content-Type: application/json
+
+{"nombre":"Franquicia Central"}
+```
+
+Respuesta `201`:
+
+```json
+{
+  "code": "201",
+  "message": "Franquicia creada correctamente.",
+  "success": true,
+  "data": {"idFranquicia": 1, "nombre": "Franquicia Central"},
+  "errors": [],
+  "timestamp": "2026-11-20T20:00:00Z"
+}
+```
+
+**Crear sucursal**
+
+```http
+POST /api/v1/franquicias/1/sucursales
+Content-Type: application/json
+
+{"nombre":"Sucursal Norte"}
+```
+
+Respuesta `201`:
+
+```json
+{
+  "code": "201",
+  "message": "Sucursal creada correctamente.",
+  "success": true,
+  "data": {"idSucursal": 10, "nombre": "Sucursal Norte"},
+  "errors": [],
+  "timestamp": "2026-11-20T20:00:00Z"
+}
+```
+
+**Crear producto**
+
+```http
+POST /api/v1/sucursales/10/productos
+Content-Type: application/json
+
+{"nombre":"Café","stock":20}
+```
+
+Respuesta `201`:
+
+```json
+{
+  "code": "201",
+  "message": "Producto creado correctamente.",
+  "success": true,
+  "data": {"idProducto": 100, "idSucursal": 10, "nombre": "Café", "stock": 20},
+  "errors": [],
+  "timestamp": "2026-11-20T20:00:00Z"
+}
+```
+
+**Consultar el mayor stock por sucursal**
+
+```http
+GET /api/v1/franquicias/1/productos/mayor-stock
+```
+
+Respuesta `200` (dos sucursales):
+
+```json
+{
+  "code": "200",
+  "message": "Productos con mayor stock consultados correctamente.",
+  "success": true,
+  "data": [
+    {"idSucursal": 10, "nombreSucursal": "Sucursal Norte", "idProducto": 100, "nombreProducto": "Café", "stock": 30},
+    {"idSucursal": 11, "nombreSucursal": "Sucursal Sur", "idProducto": 103, "nombreProducto": "Agua", "stock": 45}
+  ],
+  "errors": [],
+  "timestamp": "2026-11-20T20:00:00Z"
+}
+```
+
+**Actualizar stock y eliminar producto**
+
+```http
+PATCH /api/v1/sucursales/10/productos/100/stock
+Content-Type: application/json
+
+{"stock":30}
+```
+
+Respuesta `200` con `data`:
+
+```json
+{"idProducto":100,"idSucursal":10,"nombre":"Café","stock":30}
+```
+
+`DELETE /api/v1/sucursales/10/productos/100` responde **`204 No Content`**, sin cuerpo.
+
+Los ejemplos de **cada una de las 17 operaciones**, incluyendo los métodos `GET`, `POST`, `PATCH`, `DELETE` y sus respuestas, están en [Ejemplos de la API](docs/EJEMPLOS_API.md).
+
 ## Diseño
 
 Cada sucursal pertenece a una franquicia y cada producto a una sucursal. El stock se administra por producto; el mismo nombre puede existir en diferentes sucursales. Los nombres se validan y las actualizaciones de productos utilizan un campo de versión para controlar modificaciones concurrentes.
@@ -181,8 +269,18 @@ La aplicación está desplegada en un VPS en el ambiente **`prod`**, desde la ra
 
 Los perfiles `dev`, `test` y `stage` se utilizan en las validaciones de integración continua; **no están desplegados en el VPS**. Los puertos indicados en sus archivos de configuración no representan servicios activos en el servidor.
 
-El flujo de GitHub Actions compila, ejecuta pruebas, construye la imagen Docker, la publica en GHCR y despliega producción desde `main`. Terraform administra la red, el contenedor y el volumen de PostgreSQL de producción.
+El flujo automático sigue el orden `main → pruebas → GHCR → VPS → comprobación HTTP`. Terraform administra la red, el contenedor y el volumen de PostgreSQL de producción.
 
-Configuración y mantenimiento: [Despliegue](docs/DESPLIEGUE.md) y [Terraform](infra/terraform/README.md).
+| Archivo | Para qué sirve |
+| --- | --- |
+| [`ci.yml`](.github/workflows/ci.yml) | Compilación, pruebas, migraciones, validación Docker y Terraform. |
+| [`validar-ejecucion-local.yml`](.github/workflows/validar-ejecucion-local.yml) | Inicia la aplicación con Docker Compose y con Maven, verificando ambas opciones. |
+| [`publicar-imagen.yml`](.github/workflows/publicar-imagen.yml) | Publica en GHCR después de un CI exitoso; si viene de `main`, inicia producción. |
+| [`_desplegar-ambiente.yml`](.github/workflows/_desplegar-ambiente.yml) | Configura SSH, transfiere los archivos necesarios y despliega en el VPS. |
+| [`desplegar-*.yml`](docs/DESPLIEGUE.md#workflows-y-scripts) | Entradas manuales para cada perfil; solo `prod` está instalado en el VPS. |
+
+Los scripts [`validar-contenedor.sh`](scripts/validar-contenedor.sh) y [`desplegar-vps.sh`](scripts/desplegar-vps.sh) validan los perfiles y despliegan la API, respectivamente. Para Maven local están [`iniciar-local-maven.sh`](scripts/iniciar-local-maven.sh) y [`iniciar-local-maven.ps1`](scripts/iniciar-local-maven.ps1).
+
+La configuración, las etapas de cada workflow y los scripts se explican en [Despliegue y GitHub Actions](docs/DESPLIEGUE.md). Véanse también [Arquitectura](docs/ARQUITECTURA.md) y [Terraform](infra/terraform/README.md).
 
 **Nota:** el acceso público es HTTP y los endpoints de escritura no requieren autenticación. Utilizar únicamente datos de prueba.
